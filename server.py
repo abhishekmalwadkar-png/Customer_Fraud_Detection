@@ -1484,16 +1484,34 @@ async def api_freeze_account(request: Request):
     conn.autocommit = True
     cursor = conn.cursor()
     try:
+        # 1. Lock the customer account
         cursor.execute("UPDATE customer_accounts SET status = 'FROZEN' WHERE account_number = %s OR account_number ILIKE %s;", (acc_num, f"%{acc_num}%"))
+        
+        # 2. Only freeze active/open fraud tickets (Never revert RESOLVED or CLOSED tickets)
         if ticket_num:
-            cursor.execute("UPDATE fraud_tickets SET status = 'FROZEN' WHERE ticket_number = %s OR ticket_number ILIKE %s;", (ticket_num, f"%{ticket_num}%"))
+            cursor.execute("""
+                UPDATE fraud_tickets 
+                SET status = 'FROZEN',
+                    updated_at = CURRENT_TIMESTAMP
+                WHERE (ticket_number = %s OR ticket_number ILIKE %s) 
+                  AND status NOT IN ('RESOLVED', 'CLOSED', 'REJECTED');
+            """, (ticket_num, f"%{ticket_num}%"))
+        else:
+            # If freezing account without explicit ticket, freeze all currently open fraud tickets for this account
+            cursor.execute("""
+                UPDATE fraud_tickets 
+                SET status = 'FROZEN',
+                    updated_at = CURRENT_TIMESTAMP
+                WHERE (account_number = %s OR account_number ILIKE %s)
+                  AND status NOT IN ('RESOLVED', 'CLOSED', 'REJECTED');
+            """, (acc_num, f"%{acc_num}%"))
 
         client_ip = request.client.host if request.client else "127.0.0.1"
         actor = request.headers.get("X-User-Name") or DEFAULT_INVESTIGATOR
         cursor.execute("""
             INSERT INTO audit_logs (ticket_number, customer_name, actor, action, details, ip_address)
             VALUES (%s, %s, %s, %s, %s, %s);
-        """, (ticket_num or "MANUAL_LOCK", "Account Owner", actor, "ACCOUNT_EMERGENCY_FREEZE", f"Account {acc_num} frozen due to fraud risk", client_ip))
+        """, (ticket_num or "MANUAL_LOCK", "Account Owner", actor, "ACCOUNT_EMERGENCY_FREEZE", f"Account {acc_num} frozen due to fraud risk (Resolved tickets preserved)", client_ip))
 
         conn.commit()
 
@@ -1511,7 +1529,7 @@ async def api_freeze_account(request: Request):
             "ticket_number": ticket_num,
             "status": "FROZEN",
             "ae_integration": ae_dispatch,
-            "message": f"Bank account {acc_num} locked and AutomationEdge '{AE_WORKFLOW_FREEZE_ACCOUNT}' workflow triggered."
+            "message": f"Bank account {acc_num} locked. (Any already resolved tickets remain in history as RESOLVED)."
         }
     except Exception as exc:
         conn.rollback()
