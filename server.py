@@ -224,6 +224,8 @@ class FraudTicketCreateSchema(BaseModel):
     description: Optional[str] = Field("Customer reported suspicious transaction.", description="Incident narrative and details")
     suspect_entity: Optional[str] = Field("Unknown Merchant UPI", description="Suspect recipient or beneficiary")
     flagged_ip_or_location: Optional[str] = Field("Web Client Terminal", description="Originating IP address or geographical location")
+    idempotency_key: Optional[str] = Field(None, description="Unique client idempotency key or correlation ID to prevent duplicate complaints on retries", examples=["RPA-JOB-20260928-101"])
+    external_ref_id: Optional[str] = Field(None, description="Alias for idempotency_key", examples=["EXT-REQ-99881"])
 
     model_config = {
         "extra": "allow"
@@ -609,7 +611,7 @@ def api_get_single_ticket(ticket_id: str):
         conn.close()
 
 def _sync_insert_single_ticket(payload: Dict[str, Any], client_ip: str) -> Dict[str, Any]:
-    """Synchronous thread-safe database insertion routine for a single fraud ticket."""
+    """Synchronous thread-safe database insertion routine for a single fraud ticket with Idempotency Key support."""
     def _get_val(*keys, default=None):
         if not isinstance(payload, dict):
             return default
@@ -622,6 +624,12 @@ def _sync_insert_single_ticket(payload: Dict[str, Any], client_ip: str) -> Dict[
             if norm_k in norm_map and norm_map[norm_k] not in (None, "", "null", "<null>"):
                 return norm_map[norm_k]
         return default
+
+    # 0. Extract Idempotency Key
+    raw_idemp = _get_val("idempotency_key", "idempotencykey", "idempotency_token", "external_ref_id", "external_id", "client_req_id", "request_id", default=None)
+    idempotency_key = str(raw_idemp).strip() if raw_idemp else None
+    if idempotency_key in ("", "null", "undefined", "None"):
+        idempotency_key = None
 
     cust_name = str(_get_val("full_name", "customer_name", "fullname", "name", "cust_name", default=f"Customer {uuid.uuid4().hex[:5].upper()}")).strip()
     if not cust_name:
@@ -663,6 +671,57 @@ def _sync_insert_single_ticket(payload: Dict[str, Any], client_ip: str) -> Dict[
     conn.autocommit = True
     cursor = conn.cursor()
     try:
+        # A. Check Idempotency Cache / Records First
+        if idempotency_key:
+            cursor.execute("""
+                SELECT ticket_id, ticket_number, response_json 
+                FROM idempotency_records 
+                WHERE idempotency_key = %s 
+                LIMIT 1;
+            """, (idempotency_key,))
+            existing_rec = cursor.fetchone()
+            if existing_rec:
+                try:
+                    cached_resp = json.loads(existing_rec[2]) if existing_rec[2] else {}
+                except Exception:
+                    cached_resp = {}
+                cached_resp.update({
+                    "success": True,
+                    "idempotent_replay": True,
+                    "idempotency_key": idempotency_key,
+                    "ticket_id": existing_rec[0],
+                    "ticket_number": existing_rec[1],
+                    "message": f"Idempotent replay: Duplicate request recognized with key '{idempotency_key}'. Returning existing ticket."
+                })
+                logger.info(f"[Idempotency Hit] Replaying existing ticket {existing_rec[1]} for key '{idempotency_key}'")
+                return cached_resp
+
+            # Fallback check on fraud_tickets column
+            cursor.execute("""
+                SELECT ticket_id, ticket_number, customer_name, account_number, incident_type, amount_involved, severity, status
+                FROM fraud_tickets 
+                WHERE idempotency_key = %s 
+                LIMIT 1;
+            """, (idempotency_key,))
+            existing_ticket = cursor.fetchone()
+            if existing_ticket:
+                replay_resp = {
+                    "success": True,
+                    "idempotent_replay": True,
+                    "idempotency_key": idempotency_key,
+                    "ticket_id": existing_ticket[0],
+                    "ticket_number": existing_ticket[1],
+                    "customer_name": existing_ticket[2],
+                    "account_number": existing_ticket[3],
+                    "incident_type": existing_ticket[4],
+                    "amount_involved": float(existing_ticket[5]),
+                    "severity": existing_ticket[6],
+                    "status": existing_ticket[7],
+                    "message": f"Idempotent replay: Duplicate request recognized with key '{idempotency_key}'. Returning existing ticket."
+                }
+                logger.info(f"[Idempotency Hit] Replaying existing ticket {existing_ticket[1]} for key '{idempotency_key}'")
+                return replay_resp
+
         # 1. Check if customer already exists by exact name and contact info
         cursor.execute("""
             SELECT customer_id, full_name, risk_tier 
@@ -697,21 +756,22 @@ def _sync_insert_single_ticket(payload: Dict[str, Any], client_ip: str) -> Dict[
                 VALUES (%s, %s, %s, %s, %s, %s, %s);
             """, (cust_id, cust_name, acc_num, acc_type, amount, DEFAULT_BRANCH, date.today().isoformat()))
 
-        # 3. Insert fraud ticket
+        # 3. Insert fraud ticket with idempotency_key
         cursor.execute("""
             INSERT INTO fraud_tickets (
                 ticket_number, customer_id, customer_name, account_number, incident_type,
                 amount_involved, recovered_amount, incident_date, reported_channel,
                 severity, status, assigned_investigator, flagged_ip_or_location,
-                suspect_entity, description, action_taken
-            ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                suspect_entity, description, action_taken, idempotency_key
+            ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
             RETURNING ticket_id;
         """, (
             ticket_num, cust_id, cust_name, acc_num, incident_type,
             amount, 0.0, datetime.now(), channel,
             severity, "UNDER_INVESTIGATION", staff_assignee,
             flagged_ip, suspect,
-            desc, f"Complaint logged into PostgreSQL database; Assigned to {staff_assignee}."
+            desc, f"Complaint logged into PostgreSQL database; Assigned to {staff_assignee}.",
+            idempotency_key
         ))
         new_ticket_id = cursor.fetchone()[0]
 
@@ -721,18 +781,37 @@ def _sync_insert_single_ticket(payload: Dict[str, Any], client_ip: str) -> Dict[
             VALUES (%s, %s, %s, %s, %s, %s);
         """, (ticket_num, cust_name, "Process Studio RPA Intake", "NEW_INCIDENT_REGISTERED", f"Created fraud ticket {ticket_num} for {cust_name} ({incident_type} - ₹{amount:,.2f})", client_ip))
 
-        conn.commit()
-        METRICS["total_fraud_tickets_created"] += 1
-
-        return {
+        result_payload = {
             "success": True, 
+            "idempotent_replay": False,
+            "idempotency_key": idempotency_key,
             "ticket_id": new_ticket_id, 
             "ticket_number": ticket_num, 
             "customer_name": cust_name, 
             "account_number": acc_num,
             "incident_type": incident_type,
-            "amount_involved": amount
+            "amount_involved": amount,
+            "severity": severity,
+            "status": "UNDER_INVESTIGATION"
         }
+
+        # 5. Store into idempotency_records for future fast lookup
+        if idempotency_key:
+            try:
+                cursor.execute("""
+                    INSERT INTO idempotency_records (idempotency_key, ticket_id, ticket_number, response_json, client_ip)
+                    VALUES (%s, %s, %s, %s, %s)
+                    ON CONFLICT (idempotency_key) DO NOTHING;
+                """, (idempotency_key, new_ticket_id, ticket_num, json.dumps(result_payload), client_ip))
+            except Exception as iek:
+                logger.warning(f"Could not cache idempotency key '{idempotency_key}': {iek}")
+
+        conn.commit()
+        METRICS["total_fraud_tickets_created"] += 1
+        return result_payload
+    except Exception as exc:
+        conn.rollback()
+        raise exc
     finally:
         cursor.close()
         conn.close()
@@ -892,19 +971,36 @@ async def api_create_fraud_ticket(request: Request):
 
     client_ip = request.client.host if request.client else "127.0.0.1"
 
+    # Extract Idempotency-Key from HTTP headers if present
+    hdr_idemp = request.headers.get("Idempotency-Key") or request.headers.get("X-Idempotency-Key")
+    if hdr_idemp and isinstance(payload, dict) and "idempotency_key" not in payload and "external_ref_id" not in payload:
+        payload["idempotency_key"] = hdr_idemp.strip()
+
     try:
-        # Handle Batch List of tickets asynchronously
+        # Handle Batch List of tickets asynchronously with fault-tolerant partial gathering
         if isinstance(payload, list):
             tasks = [asyncio.to_thread(_sync_insert_single_ticket, item, client_ip) for item in payload if isinstance(item, dict)]
-            results = await asyncio.gather(*tasks)
+            results = await asyncio.gather(*tasks, return_exceptions=True)
+            
+            successful_tickets = []
+            errors_list = []
+            for idx, res in enumerate(results):
+                if isinstance(res, Exception):
+                    errors_list.append({"index": idx, "error": str(res)})
+                else:
+                    successful_tickets.append(res)
+            
             return {
-                "success": True,
-                "count": len(results),
-                "message": f"Successfully processed {len(results)} fraud complaints asynchronously.",
-                "tickets": results
+                "success": len(errors_list) == 0,
+                "count": len(successful_tickets),
+                "processed_count": len(successful_tickets),
+                "failed_count": len(errors_list),
+                "message": f"Processed {len(successful_tickets)} complaints asynchronously ({len(errors_list)} failed).",
+                "tickets": successful_tickets,
+                "errors": errors_list if errors_list else None
             }
         elif isinstance(payload, dict):
-            # Run blocking database I/O asynchronously in threadpool
+            # Run blocking database I/O asynchronously in threadpool with Idempotency Key protection
             result = await asyncio.to_thread(_sync_insert_single_ticket, payload, client_ip)
             return result
         else:

@@ -76,6 +76,7 @@ CREATE TABLE fraud_tickets (
     description TEXT NOT NULL,
     action_taken TEXT,
     resolution_notes TEXT,
+    idempotency_key VARCHAR(150) UNIQUE,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     tsv_search tsvector GENERATED ALWAYS AS (
@@ -90,7 +91,17 @@ CREATE TABLE fraud_tickets (
     ) STORED
 );
 
--- 4. Transactions Table (Range Partitioned by txn_time)
+-- 4. Idempotency Records Table
+CREATE TABLE IF NOT EXISTS idempotency_records (
+    idempotency_key VARCHAR(150) PRIMARY KEY,
+    ticket_id INT,
+    ticket_number VARCHAR(50),
+    response_json TEXT,
+    client_ip VARCHAR(45),
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+-- 5. Transactions Table (Range Partitioned by txn_time)
 CREATE TABLE transactions (
     txn_id SERIAL,
     txn_reference VARCHAR(40) NOT NULL,
@@ -128,7 +139,7 @@ FOR VALUES FROM ('2026-10-01 00:00:00') TO ('2027-01-01 00:00:00');
 
 CREATE TABLE IF NOT EXISTS transactions_default PARTITION OF transactions DEFAULT;
 
--- 5. Audit & Security Logs Table
+-- 6. Audit & Security Logs Table
 CREATE TABLE audit_logs (
     log_id SERIAL PRIMARY KEY,
     ticket_number VARCHAR(30),
