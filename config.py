@@ -60,3 +60,14 @@ DEFAULT_CHANNEL = os.getenv("DEFAULT_CHANNEL", "Process Studio RPA Intake")
 DEFAULT_INCIDENT_TYPE = os.getenv("DEFAULT_INCIDENT_TYPE", "Suspected Fraudulent Transaction")
 DEFAULT_ACCOUNT_TYPE = os.getenv("DEFAULT_ACCOUNT_TYPE", "SAVINGS")
 DEFAULT_SEVERITY = os.getenv("DEFAULT_SEVERITY", "HIGH")
+
+# AutomationEdge (AE) T4 Server RPA Configuration
+AE_SERVER_URL = os.getenv("AE_SERVER_URL", "http://localhost:8080/t4server").rstrip("/")
+AE_ORG_CODE = os.getenv("AE_ORG_CODE", "T4")
+AE_USERNAME = os.getenv("AE_USERNAME", "admin")
+AE_PASSWORD = os.getenv("AE_PASSWORD", "root")
+AE_WORKFLOW_RAISE_FRAUD = os.getenv("AE_WORKFLOW_RAISE_FRAUD", "raise fraud")
+AE_WORKFLOW_FREEZE_ACCOUNT = os.getenv("AE_WORKFLOW_FREEZE_ACCOUNT", "freezeaccount")
+AE_WORKFLOW_RESOLVE_TICKET = os.getenv("AE_WORKFLOW_RESOLVE_TICKET", "ResolveTicket")
+AE_TRIGGER_ENABLED = os.getenv("AE_TRIGGER_ENABLED", "true").lower() in ("true", "1", "yes")
+

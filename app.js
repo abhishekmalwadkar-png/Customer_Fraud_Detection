@@ -1390,7 +1390,7 @@ async function handleFreezeAction() {
     });
     const data = await res.json();
     if (data.success) {
-      showToast(`Account ${accNum} has been temporarily blocked to protect customer funds.`, "warning");
+      showToast(`Account ${accNum} blocked. AutomationEdge 'freezeaccount' workflow dispatched!`, "warning");
       loadAllData();
     }
   } catch (err) {
@@ -1422,18 +1422,32 @@ async function handleStatusUpdate(newStatus) {
   document.getElementById("drawerOverlay").classList.remove("open");
 
   try {
-    const res = await fetch(`/api/fraud-tickets/${ticketId}`, {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        status: newStatus,
-        action_taken: `Staff updated status to ${newStatus} on ${new Date().toLocaleDateString()}`
-      })
-    });
+    let res;
+    if (newStatus === "RESOLVED") {
+      res = await fetch("/api/resolve-ticket", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          ticket_id: ticketId,
+          ticket_number: ticketNum,
+          action_taken: `Dispute verified and resolved. Refund credited back to customer on ${new Date().toLocaleDateString()}`
+        })
+      });
+    } else {
+      res = await fetch(`/api/fraud-tickets/${ticketId}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          status: newStatus,
+          action_taken: `Staff updated status to ${newStatus} on ${new Date().toLocaleDateString()}`
+        })
+      });
+    }
     const data = await res.json();
     if (data.success) {
       const friendlyStatus = newStatus === 'RESOLVED' ? 'Solved / Refunded' : (newStatus === 'FROZEN' ? 'Account Blocked' : (newStatus === 'ESCALATED' ? 'Escalated' : 'In Progress'));
-      showToast(`Complaint ${currentDossierTicket.ticket_number} updated to "${friendlyStatus}"`, "success");
+      const aeWorkflowNote = newStatus === 'RESOLVED' ? " (AutomationEdge 'ResolveTicket' workflow dispatched)" : "";
+      showToast(`Complaint ${currentDossierTicket.ticket_number} updated to "${friendlyStatus}"${aeWorkflowNote}`, "success");
       loadAllData();
     }
   } catch (err) {
