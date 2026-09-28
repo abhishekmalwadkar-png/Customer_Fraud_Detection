@@ -1093,6 +1093,113 @@ def api_update_ticket(ticket_id: str, payload: FraudTicketUpdateSchema, request:
         cursor.close()
         conn.close()
 
+@app.api_route("/api/resolve-ticket", methods=["GET", "POST", "PATCH"], tags=["Fraud Operations"])
+async def api_resolve_ticket(
+    request: Request,
+    ticket_id: Optional[str] = None,
+    ticket_number: Optional[str] = None,
+    action_taken: Optional[str] = None,
+    recovered_amount: Optional[float] = None
+):
+    """
+    Dedicated endpoint to Mark a Fraud Ticket as RESOLVED / SOLVED.
+    Automatically updates ticket status to 'RESOLVED', sets recovered_amount, and adds audit log.
+    Accepts JSON body, query parameters, or raw text via POST/GET/PATCH.
+    """
+    import re
+    t_identifier = ticket_id or ticket_number or request.query_params.get("ticket_id") or request.query_params.get("ticket_number")
+    note = action_taken or request.query_params.get("action_taken") or "Dispute verified and resolved. Refund credited back to customer."
+    rec_amt = recovered_amount or request.query_params.get("recovered_amount")
+
+    # Inspect Body
+    if not t_identifier:
+        try:
+            raw_bytes = await request.body()
+            if raw_bytes:
+                raw_str = raw_bytes.decode("utf-8", errors="ignore").strip()
+                if raw_str.startswith(("{", "[")):
+                    body_json = json.loads(raw_str)
+                    if isinstance(body_json, dict):
+                        t_identifier = body_json.get("ticket_number") or body_json.get("ticket_id") or body_json.get("ticket_no") or body_json.get("id")
+                        note = body_json.get("action_taken") or body_json.get("action") or body_json.get("notes") or note
+                        rec_amt = body_json.get("recovered_amount") or body_json.get("amount") or rec_amt
+                
+                if not t_identifier:
+                    match = re.search(r'FRD-[\w-]+', raw_str, re.IGNORECASE)
+                    if match:
+                        t_identifier = match.group(0).upper()
+        except Exception:
+            pass
+
+    if not t_identifier:
+        raise HTTPException(
+            status_code=400,
+            detail="Missing 'ticket_number' or 'ticket_id'. In Process Studio, please pass JSON {'ticket_number': 'FRD-2026-XXXX'} or query param ?ticket_number=FRD-XXXX."
+        )
+
+    t_identifier = str(t_identifier).strip()
+    client_ip = request.client.host if request.client else "127.0.0.1"
+    actor = request.headers.get("X-User-Name") or DEFAULT_INVESTIGATOR
+
+    conn = get_db_connection()
+    conn.autocommit = True
+    cursor = conn.cursor()
+    try:
+        # Update fraud_tickets to RESOLVED and set recovered_amount
+        if rec_amt is not None:
+            cursor.execute("""
+                UPDATE fraud_tickets
+                SET status = 'RESOLVED',
+                    action_taken = COALESCE(%s, action_taken),
+                    recovered_amount = %s,
+                    updated_at = CURRENT_TIMESTAMP
+                WHERE ticket_id = %s OR ticket_number = %s OR ticket_number ILIKE %s
+                RETURNING ticket_id, ticket_number, customer_id, customer_name, amount_involved, recovered_amount, account_number;
+            """, (note, float(rec_amt), int(t_identifier) if t_identifier.isdigit() else -1, t_identifier, f"%{t_identifier}%"))
+        else:
+            cursor.execute("""
+                UPDATE fraud_tickets
+                SET status = 'RESOLVED',
+                    action_taken = COALESCE(%s, action_taken),
+                    recovered_amount = amount_involved,
+                    updated_at = CURRENT_TIMESTAMP
+                WHERE ticket_id = %s OR ticket_number = %s OR ticket_number ILIKE %s
+                RETURNING ticket_id, ticket_number, customer_id, customer_name, amount_involved, recovered_amount, account_number;
+            """, (note, int(t_identifier) if t_identifier.isdigit() else -1, t_identifier, f"%{t_identifier}%"))
+
+        row = cursor.fetchone()
+
+        if not row:
+            raise HTTPException(status_code=404, detail=f"Fraud ticket '{t_identifier}' not found in database.")
+
+        t_id, t_num, cust_id, cust_name, amt_inv, rec_done, acc_num = row
+
+        # Audit log
+        cursor.execute("""
+            INSERT INTO audit_logs (ticket_number, customer_name, actor, action, details, ip_address)
+            VALUES (%s, %s, %s, %s, %s, %s);
+        """, (t_num, cust_name, actor, "STATUS_RESOLVED", f"Ticket marked RESOLVED by RPA/Staff. {note} (Recovered: ₹{float(rec_done):,.2f})", client_ip))
+
+        conn.commit()
+        return {
+            "success": True,
+            "ticket_id": t_id,
+            "ticket_number": t_num,
+            "customer_name": cust_name,
+            "account_number": acc_num,
+            "status": "RESOLVED",
+            "amount_involved": float(amt_inv),
+            "recovered_amount": float(rec_done),
+            "action_taken": note,
+            "message": f"Fraud ticket {t_num} marked as RESOLVED and funds recorded as recovered."
+        }
+    except Exception as exc:
+        conn.rollback()
+        raise exc
+    finally:
+        cursor.close()
+        conn.close()
+
 @app.post("/api/fraud-tickets/bulk-update", tags=["Fraud Operations"])
 def api_bulk_update_tickets(payload: BulkTicketUpdateSchema, request: Request):
     """Bulk update status or assigned staff across multiple selected tickets."""
@@ -1144,29 +1251,96 @@ def api_bulk_update_tickets(payload: BulkTicketUpdateSchema, request: Request):
         cursor.close()
         conn.close()
 
-@app.post("/api/freeze-account", tags=["Account Actions"])
-def api_freeze_account(payload: FreezeAccountSchema, request: Request):
-    """Emergency lock an account and linked fraud case."""
+@app.api_route("/api/freeze-account", methods=["GET", "POST"], tags=["Account Actions"])
+async def api_freeze_account(request: Request):
+    """
+    Emergency lock an account and linked fraud case.
+    Accepts JSON body, raw string, form data, or URL query parameters via GET/POST.
+    """
+    import re
+    acc_num = None
+    ticket_num = None
+
+    # 1. Query parameters
+    acc_num = request.query_params.get("account_number") or request.query_params.get("account_no") or request.query_params.get("account")
+    ticket_num = request.query_params.get("ticket_number") or request.query_params.get("ticket_no")
+
+    # 2. Body inspection
+    if not acc_num:
+        try:
+            raw_bytes = await request.body()
+            if raw_bytes:
+                raw_str = raw_bytes.decode("utf-8", errors="ignore").strip()
+                
+                # Try JSON
+                if raw_str.startswith(("{", "[")):
+                    try:
+                        body_json = json.loads(raw_str)
+                        if isinstance(body_json, dict):
+                            acc_num = body_json.get("account_number") or body_json.get("account_no") or body_json.get("acc_num") or body_json.get("account")
+                            ticket_num = ticket_num or body_json.get("ticket_number") or body_json.get("ticket_no")
+                    except Exception:
+                        pass
+                
+                # Try form data
+                if not acc_num and ("=" in raw_str):
+                    try:
+                        form = await request.form()
+                        acc_num = form.get("account_number") or form.get("account_no") or form.get("account")
+                        ticket_num = ticket_num or form.get("ticket_number") or form.get("ticket_no")
+                    except Exception:
+                        pass
+
+                # Regex fallback for ACT-XXXX patterns inside raw text
+                if not acc_num:
+                    match = re.search(r'ACT-[\w-]+', raw_str, re.IGNORECASE)
+                    if match:
+                        acc_num = match.group(0).upper()
+                    
+                    t_match = re.search(r'FRD-[\w-]+', raw_str, re.IGNORECASE)
+                    if t_match:
+                        ticket_num = t_match.group(0).upper()
+        except Exception as e:
+            logger.warning(f"Error parsing freeze-account body: {e}")
+
+    if not acc_num:
+        raise HTTPException(
+            status_code=400,
+            detail="Missing 'account_number'. In Process Studio, please link 'request_body' to the Body field in REST Client step, or pass ?account_number=ACT-XXXX."
+        )
+
+    acc_num = str(acc_num).strip()
+    if not acc_num.upper().startswith("ACT-") and not any(c.isalpha() for c in acc_num):
+        acc_num = f"ACT-{acc_num}"
+
+    ticket_num = str(ticket_num).strip() if ticket_num else None
+
     conn = get_db_connection()
     conn.autocommit = True
     cursor = conn.cursor()
     try:
-        acc_num = payload.account_number
-        ticket_num = payload.ticket_number
-
-        cursor.execute("UPDATE customer_accounts SET status = 'FROZEN' WHERE account_number = %s;", (acc_num,))
+        cursor.execute("UPDATE customer_accounts SET status = 'FROZEN' WHERE account_number = %s OR account_number ILIKE %s;", (acc_num, f"%{acc_num}%"))
         if ticket_num:
-            cursor.execute("UPDATE fraud_tickets SET status = 'FROZEN' WHERE ticket_number = %s;", (ticket_num,))
+            cursor.execute("UPDATE fraud_tickets SET status = 'FROZEN' WHERE ticket_number = %s OR ticket_number ILIKE %s;", (ticket_num, f"%{ticket_num}%"))
 
         client_ip = request.client.host if request.client else "127.0.0.1"
         actor = request.headers.get("X-User-Name") or DEFAULT_INVESTIGATOR
         cursor.execute("""
-            INSERT INTO audit_logs (ticket_number, actor, action, details, ip_address)
-            VALUES (%s, %s, %s, %s, %s);
-        """, (ticket_num or "MANUAL_LOCK", actor, "ACCOUNT_EMERGENCY_FREEZE", f"Account {acc_num} frozen due to fraud risk", client_ip))
+            INSERT INTO audit_logs (ticket_number, customer_name, actor, action, details, ip_address)
+            VALUES (%s, %s, %s, %s, %s, %s);
+        """, (ticket_num or "MANUAL_LOCK", "Account Owner", actor, "ACCOUNT_EMERGENCY_FREEZE", f"Account {acc_num} frozen due to fraud risk", client_ip))
 
         conn.commit()
-        return {"success": True, "account_number": acc_num, "status": "FROZEN"}
+        return {
+            "success": True, 
+            "account_number": acc_num, 
+            "ticket_number": ticket_num,
+            "status": "FROZEN",
+            "message": f"Bank account {acc_num} locked and frozen successfully."
+        }
+    except Exception as exc:
+        conn.rollback()
+        raise exc
     finally:
         cursor.close()
         conn.close()
