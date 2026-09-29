@@ -543,40 +543,29 @@ def api_get_staff_users():
 def api_overview(request: Request):
     """
     Returns top-level metric counters for the Bank Fraud Operations Dashboard.
-    If logged in as INVESTIGATOR, scopes metrics to their assigned cases; If MANAGER, shows all bank data.
     """
     conn = get_db_connection()
     cursor = conn.cursor()
     try:
-        staff_role = request.headers.get("X-User-Role") or request.query_params.get("user_role") or "MANAGER"
-        staff_name = request.headers.get("X-Staff-User") or request.headers.get("X-User-Name") or request.query_params.get("staff_user")
-
-        filter_sql = ""
-        params = []
-        if staff_role.upper() == "INVESTIGATOR" and staff_name and staff_name.upper() != "ALL":
-            filter_sql = "WHERE assigned_investigator ILIKE %s"
-            params = [f"%{staff_name.strip()}%"]
-
-        cursor.execute(f"SELECT COUNT(*) FROM fraud_tickets {filter_sql};", tuple(params))
+        cursor.execute("SELECT COUNT(*) FROM fraud_tickets;")
         total_tickets = cursor.fetchone()[0]
 
-        cursor.execute(f"SELECT COALESCE(SUM(amount_involved), 0) FROM fraud_tickets {filter_sql};", tuple(params))
+        cursor.execute("SELECT COALESCE(SUM(amount_involved), 0) FROM fraud_tickets;")
         total_amount = cursor.fetchone()[0]
 
-        cursor.execute(f"SELECT COALESCE(SUM(recovered_amount), 0) FROM fraud_tickets {filter_sql};", tuple(params))
+        cursor.execute("SELECT COALESCE(SUM(recovered_amount), 0) FROM fraud_tickets;")
         recovered_amount = cursor.fetchone()[0]
 
-        where_and = f"{filter_sql} AND" if filter_sql else "WHERE"
-        cursor.execute(f"SELECT COUNT(*) FROM fraud_tickets {where_and} status = 'UNDER_INVESTIGATION';", tuple(params))
+        cursor.execute("SELECT COUNT(*) FROM fraud_tickets WHERE status = 'UNDER_INVESTIGATION';")
         under_investigation = cursor.fetchone()[0]
 
-        cursor.execute(f"SELECT COUNT(*) FROM fraud_tickets {where_and} status = 'FROZEN';", tuple(params))
+        cursor.execute("SELECT COUNT(*) FROM fraud_tickets WHERE status = 'FROZEN';")
         frozen_accounts = cursor.fetchone()[0]
 
-        cursor.execute(f"SELECT COUNT(*) FROM fraud_tickets {where_and} status = 'RESOLVED';", tuple(params))
+        cursor.execute("SELECT COUNT(*) FROM fraud_tickets WHERE status = 'RESOLVED';")
         resolved_cases = cursor.fetchone()[0]
 
-        cursor.execute(f"SELECT COUNT(*) FROM fraud_tickets {where_and} status NOT IN ('RESOLVED', 'CLOSED', 'REJECTED');", tuple(params))
+        cursor.execute("SELECT COUNT(*) FROM fraud_tickets WHERE status NOT IN ('RESOLVED', 'CLOSED', 'REJECTED');")
         active_tickets = cursor.fetchone()[0]
 
         cursor.execute("SELECT COUNT(*) FROM customers WHERE risk_tier = 'CRITICAL';")
@@ -594,9 +583,7 @@ def api_overview(request: Request):
             "frozen_accounts": frozen_accounts,
             "resolved_cases": resolved_cases,
             "critical_customers": critical_customers,
-            "total_customers": total_customers,
-            "view_scope": "INVESTIGATOR_MY_TICKETS" if staff_role.upper() == "INVESTIGATOR" else "MANAGER_ALL_TICKETS",
-            "active_staff": staff_name or "All Staff"
+            "total_customers": total_customers
         })
     finally:
         cursor.close()
@@ -616,7 +603,6 @@ def api_get_fraud_tickets(
 ):
     """
     List recorded fraud incidents with optional FTS search, filtering, and server-side pagination.
-    Investigators see only tickets assigned to them; Managers see all tickets.
     """
     conn = get_db_connection()
     cursor = conn.cursor()
@@ -624,14 +610,7 @@ def api_get_fraud_tickets(
         where_clauses = []
         params = []
 
-        staff_role = request.headers.get("X-User-Role") or request.query_params.get("user_role") or "MANAGER"
-        staff_name = request.headers.get("X-Staff-User") or request.headers.get("X-User-Name") or request.query_params.get("staff_user")
-
-        # Role-based restriction: Investigators only see their own tickets
-        if staff_role.upper() == "INVESTIGATOR" and staff_name and staff_name.upper() != "ALL":
-            where_clauses.append("t.assigned_investigator ILIKE %s")
-            params.append(f"%{staff_name.strip()}%")
-        elif assigned_to and assigned_to.strip() and assigned_to != "ALL":
+        if assigned_to and assigned_to.strip() and assigned_to != "ALL":
             where_clauses.append("t.assigned_investigator = %s")
             params.append(assigned_to.strip())
 

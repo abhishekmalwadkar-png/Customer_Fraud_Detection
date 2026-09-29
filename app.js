@@ -3,235 +3,25 @@
  * Interactive Frontend Client with Live PostgreSQL Integration
  */
 
-// Staff Authentication & Role State
-const DEFAULT_STAFF_USER = {
-  user_id: 1,
-  username: "manager",
-  full_name: "Vikram Malhotra",
-  role: "MANAGER",
-  email: "vikram.malhotra@bank.internal",
-  department: "Fraud Risk Management (All Access)"
-};
-
-let currentStaffUser = JSON.parse(localStorage.getItem("APEX_CURRENT_STAFF_USER") || JSON.stringify(DEFAULT_STAFF_USER));
-let availableStaffUsers = [];
-
-function getCurrentStaffUser() {
-  return currentStaffUser || DEFAULT_STAFF_USER;
-}
-
-function getAuthHeaders() {
-  const user = getCurrentStaffUser();
-  return {
-    "Content-Type": "application/json",
-    "X-User-Role": user.role || "MANAGER",
-    "X-Staff-User": user.full_name || "Vikram Malhotra",
-    "X-User-Name": user.full_name || "Vikram Malhotra"
-  };
-}
-
-function setCurrentStaffUser(user) {
-  currentStaffUser = user;
-  localStorage.setItem("APEX_CURRENT_STAFF_USER", JSON.stringify(user));
-  updateStaffHeaderBadge();
-  showToast(`Logged in as ${user.full_name} (${user.role === 'MANAGER' ? 'Manager - All Tickets' : 'Investigator - My Tickets'})`, "info");
-  
-  // Clear selection and reload scoped tickets
-  selectedTicketIds.clear();
-  ticketCurrentPage = 1;
-  loadAllData();
-}
-
-function getInitials(name) {
-  if (!name) return "ST";
-  return String(name).trim().split(/\s+/).map(w => w[0]).join("").substring(0, 2).toUpperCase() || "ST";
-}
-
-function updateStaffHeaderBadge() {
-  const user = getCurrentStaffUser();
-  const avatarEl = document.getElementById("userAvatar");
-  const nameEl = document.getElementById("userFullName");
-  const roleEl = document.getElementById("userRoleBadge");
-  const dropAvatar = document.getElementById("dropdownAvatar");
-  const dropTitle = document.getElementById("dropdownStaffTitle");
-  const dropRole = document.getElementById("dropdownStaffRole");
-
-  const initials = getInitials(user.full_name);
-  if (avatarEl) avatarEl.textContent = initials;
-  if (nameEl) nameEl.textContent = user.full_name;
-  if (dropAvatar) dropAvatar.textContent = initials;
-  if (dropTitle) dropTitle.textContent = user.full_name;
-
-  if (user.role === "MANAGER") {
-    if (roleEl) roleEl.innerHTML = `<i class="fa-solid fa-crown" style="color: #f59e0b;"></i> Fraud Manager (All Tickets)`;
-    if (dropRole) dropRole.textContent = `👑 Fraud Manager • Full Bank Access`;
-  } else {
-    if (roleEl) roleEl.innerHTML = `<i class="fa-solid fa-shield-halved" style="color: #0284c7;"></i> Investigator (My Cases Only)`;
-    if (dropRole) dropRole.textContent = `🛡️ ${user.department || 'Investigator'} • My Tickets Only`;
-  }
-
-  // Highlight active user in dropdown
-  renderStaffQuickSwitchList();
-}
-
-async function fetchStaffUsers() {
-  try {
-    const res = await fetch("/api/auth/users");
-    if (res.ok) {
-      availableStaffUsers = await res.json();
-      renderStaffQuickSwitchList();
-      renderLoginPresetChips();
-    }
-  } catch (err) {
-    console.warn("Could not load staff users list:", err);
-  }
-}
-
-function renderStaffQuickSwitchList() {
-  const container = document.getElementById("staffQuickSwitchList");
-  if (!container || !availableStaffUsers.length) return;
-
-  const current = getCurrentStaffUser();
-  container.innerHTML = availableStaffUsers.map(u => {
-    const isActive = (u.username === current.username);
-    const badgeClass = (u.role === 'MANAGER') ? 'manager' : 'investigator';
-    const badgeLabel = (u.role === 'MANAGER') ? '👑 Manager' : '🛡️ Investigator';
-    
-    return `
-      <div class="staff-switch-item ${isActive ? 'active' : ''}" onclick="selectStaffUser('${u.username}')">
-        <div class="staff-switch-left">
-          <div class="staff-switch-avatar">${getInitials(u.full_name)}</div>
-          <div class="staff-switch-meta">
-            <span class="staff-switch-name">${escapeHtml(u.full_name)}</span>
-            <span class="staff-switch-role">${escapeHtml(u.department || u.role)}</span>
-          </div>
-        </div>
-        <span class="staff-switch-badge ${badgeClass}">${badgeLabel}</span>
-      </div>
-    `;
-  }).join("");
-}
-
-function renderLoginPresetChips() {
-  const container = document.getElementById("loginPresetChips");
-  if (!container || !availableStaffUsers.length) return;
-
-  container.innerHTML = availableStaffUsers.map(u => {
-    const isMgr = (u.role === 'MANAGER');
-    const chipClass = isMgr ? 'manager-chip' : '';
-    const icon = isMgr ? 'fa-crown' : 'fa-user-shield';
-    return `
-      <button type="button" class="preset-chip ${chipClass}" onclick="fillAndSubmitDemoLogin('${u.username}', '${u.demo_password || 'Password@123'}')">
-        <i class="fa-solid ${icon}"></i>
-        <span>${escapeHtml(u.full_name)} (${u.role})</span>
-      </button>
-    `;
-  }).join("");
-}
-
-window.selectStaffUser = function(username) {
-  const target = availableStaffUsers.find(u => u.username === username);
-  if (target) {
-    setCurrentStaffUser(target);
-    const dropdown = document.getElementById("userDropdownMenu");
-    if (dropdown) dropdown.style.display = "none";
-  }
-};
-
-window.fillAndSubmitDemoLogin = async function(uname, pwd) {
-  const uInput = document.getElementById("loginUsername");
-  const pInput = document.getElementById("loginPassword");
-  if (uInput) uInput.value = uname;
-  if (pInput) pInput.value = pwd;
-  
-  await performStaffLogin(uname, pwd);
-};
-
-async function performStaffLogin(username, password) {
-  try {
-    const res = await fetch("/api/auth/login", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ username, password })
-    });
-    const data = await res.json();
-    if (res.ok && data.success) {
-      setCurrentStaffUser(data.user);
-      document.getElementById("modalStaffLogin")?.classList.remove("open");
-      document.getElementById("modalStaffLogin").style.display = "none";
-    } else {
-      showToast(data.detail || "Authentication failed. Check credentials.", "error");
-    }
-  } catch (err) {
-    showToast("Network error during login.", "error");
-  }
-}
-
-function initStaffAuth() {
-  updateStaffHeaderBadge();
-  fetchStaffUsers();
-
-  const profileBtn = document.getElementById("btnUserProfile");
-  const dropdown = document.getElementById("userDropdownMenu");
-  if (profileBtn && dropdown) {
-    profileBtn.addEventListener("click", (e) => {
-      e.stopPropagation();
-      const isVisible = dropdown.style.display === "block";
-      dropdown.style.display = isVisible ? "none" : "block";
-    });
-
-    document.addEventListener("click", (e) => {
-      if (!e.target.closest("#userProfileWrapper")) {
-        dropdown.style.display = "none";
-      }
-    });
-  }
-
-  // Open Login Modal
-  const btnOpenLogin = document.getElementById("btnOpenLoginModal");
-  const modalLogin = document.getElementById("modalStaffLogin");
-  const btnCloseLogin = document.getElementById("btnCloseLoginModal");
-  const btnCancelLogin = document.getElementById("btnCancelLoginModal");
-  const formLogin = document.getElementById("formStaffLogin");
-
-  if (btnOpenLogin && modalLogin) {
-    btnOpenLogin.addEventListener("click", () => {
-      dropdown.style.display = "none";
-      modalLogin.style.display = "flex";
-      modalLogin.classList.add("open");
-    });
-  }
-
-  if (btnCloseLogin && modalLogin) {
-    btnCloseLogin.addEventListener("click", () => {
-      modalLogin.style.display = "none";
-      modalLogin.classList.remove("open");
-    });
-  }
-
-  if (btnCancelLogin && modalLogin) {
-    btnCancelLogin.addEventListener("click", () => {
-      modalLogin.style.display = "none";
-      modalLogin.classList.remove("open");
-    });
-  }
-
-  if (formLogin) {
-    formLogin.addEventListener("submit", async (e) => {
-      e.preventDefault();
-      const u = document.getElementById("loginUsername")?.value.trim();
-      const p = document.getElementById("loginPassword")?.value.trim();
-      if (u && p) {
-        await performStaffLogin(u, p);
-      }
-    });
-  }
-}
+// Global State
+let allTickets = [];
+let filteredTickets = [];
+let solvedTickets = [];
+let filteredSolvedTickets = [];
+let knownTicketIds = new Set();
+let liveNotifications = [];
+let ticketCurrentPage = 1;
+const ticketPageSize = 10;
+let solvedCurrentPage = 1;
+const solvedPageSize = 10;
+let customerDirectoryData = [];
+let recentTxData = [];
+let selectedTicketIds = new Set();
+let currentDossierTicket = null;
 
 document.addEventListener("DOMContentLoaded", () => {
   initTabs();
   initClock();
-  initStaffAuth();
   initEventListeners();
   checkSystemHealth();
   loadSavedNotifications();
@@ -239,7 +29,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
   // 1.5-second ultra-fast real-time auto-sync with AutomationEdge Process Studio & incoming API calls
   setInterval(() => {
-    const isModalOpen = document.getElementById("newTicketModal")?.classList.contains("open") || document.getElementById("modalStaffLogin")?.classList.contains("open");
+    const isModalOpen = document.getElementById("newTicketModal")?.classList.contains("open");
     const isDrawerOpen = document.getElementById("drawerOverlay")?.classList.contains("open");
     if (!isModalOpen && !isDrawerOpen) {
       loadOverviewStats();
@@ -597,7 +387,7 @@ async function loadAllData() {
 
 async function loadOverviewStats() {
   try {
-    const res = await fetch("/api/overview", { headers: getAuthHeaders() });
+    const res = await fetch("/api/overview");
     const data = await res.json();
 
     const totalTickets = data.total_tickets || 0;
@@ -793,7 +583,7 @@ function renderHomeUrgentList() {
 async function loadFraudTickets(isBackground = false) {
   const tbody = document.getElementById("fraudTicketsTableBody");
   try {
-    const res = await fetch("/api/fraud-tickets", { headers: getAuthHeaders() });
+    const res = await fetch("/api/fraud-tickets");
     const freshTickets = await res.json();
     if (!Array.isArray(freshTickets)) return;
 
