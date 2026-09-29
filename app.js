@@ -44,7 +44,7 @@ function setCurrentStaffUser(user) {
 
 function getInitials(name) {
   if (!name) return "ST";
-  return name.split(" ").map(w => w[0]).join("").substring(0, 2).toUpperCase();
+  return String(name).trim().split(/\s+/).map(w => w[0]).join("").substring(0, 2).toUpperCase() || "ST";
 }
 
 function updateStaffHeaderBadge() {
@@ -859,6 +859,7 @@ async function loadFraudTickets(isBackground = false) {
 
     applyFilters();
   } catch (err) {
+    console.error("loadFraudTickets error:", err);
     if (!isBackground) {
       tbody.innerHTML = `<tr><td colspan="10" class="loading-state" style="color: var(--rose);">Failed to load tickets from database. Please verify backend is running.</td></tr>`;
     }
@@ -1127,7 +1128,7 @@ function renderSolvedTicketsTable(tickets) {
           <span class="tag-pill tag-resolved"><i class="fa-solid fa-circle-check"></i> SOLVED</span>
         </td>
         <td>
-          <span style="font-size: 12px; color: var(--text-muted);">${escapeHtml(t.assigned_investigator ? t.assigned_investigator.split('(')[0] : 'Branch Officer')}</span>
+          <span style="font-size: 12px; color: var(--text-muted);">${escapeHtml(t.assigned_investigator ? String(t.assigned_investigator).split('(')[0].trim() : 'Branch Officer')}</span>
         </td>
         <td style="text-align: right;">
           <button class="btn btn-xs btn-outline" onclick="openIncidentDossier('${t.ticket_id}')">
@@ -1246,7 +1247,7 @@ function renderFraudTicketsTable(tickets) {
         <td>${sevBadge}</td>
         <td>${statusBadge}</td>
         <td>
-          <span style="font-size: 12px; color: var(--text-muted);">${escapeHtml(t.assigned_investigator ? t.assigned_investigator.split('(')[0] : 'Investigator')}</span>
+          <span style="font-size: 12px; color: var(--text-muted);">${escapeHtml(t.assigned_investigator ? String(t.assigned_investigator).split('(')[0].trim() : 'Investigator')}</span>
         </td>
         <td style="text-align: right;">
           <button class="btn btn-xs btn-outline" onclick="openIncidentDossier('${t.ticket_id}')">
@@ -2136,11 +2137,11 @@ function getStatusBadgeHtml(status) {
 }
 
 function formatLocation(city, state, fallback) {
-  const c = (city || '').trim();
-  const s = (state || '').trim();
+  const c = String(city || '').trim();
+  const s = String(state || '').trim();
   if (c && s) return `${c}, ${s}`;
   if (c || s) return c || s;
-  return fallback ? (fallback || '').trim() : '';
+  return fallback ? String(fallback).trim() : '';
 }
 
 function formatCurrency(val) {
