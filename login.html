@@ -150,54 +150,9 @@
       border-top-right-radius: var(--radius-lg);
     }
 
-    /* Auth Role Switcher Tabs */
-    .auth-role-tabs {
-      display: flex;
-      background: #f1f5f9;
-      padding: 4px;
-      border-radius: var(--radius-md);
-      margin-bottom: 24px;
-      border: 1px solid var(--border-light);
-      gap: 4px;
-    }
-
-    .role-tab {
-      flex: 1;
-      padding: 9px 12px;
-      border: none;
-      background: transparent;
-      border-radius: var(--radius-sm);
-      font-family: inherit;
-      font-size: 12.5px;
-      font-weight: 600;
-      color: var(--text-muted);
-      cursor: pointer;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      gap: 7px;
-      transition: all 0.2s ease;
-    }
-
-    .role-tab:hover {
-      color: var(--text-dark);
-      background: rgba(255, 255, 255, 0.6);
-    }
-
-    .role-tab.active {
-      background: #ffffff;
-      color: var(--bank-blue);
-      font-weight: 700;
-      box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1), 0 1px 2px rgba(0, 0, 0, 0.06);
-    }
-
-    .role-tab.active i {
-      color: var(--bank-primary);
-    }
-
     .card-brand-row {
       text-align: center;
-      margin-bottom: 20px;
+      margin-bottom: 24px;
     }
 
     .card-shield-icon {
@@ -212,11 +167,10 @@
       justify-content: center;
       font-size: 20px;
       color: #0056b3;
-      transition: all 0.2s ease;
     }
 
     .card-brand-row h2 {
-      font-size: 19px;
+      font-size: 20px;
       font-weight: 700;
       color: #0f172a;
       margin-bottom: 4px;
@@ -367,8 +321,8 @@
 
     /* Quick Demo Profile Selector Section */
     .quick-demo-section {
-      margin-top: 22px;
-      padding-top: 16px;
+      margin-top: 24px;
+      padding-top: 18px;
       border-top: 1px dashed var(--border-color);
     }
 
@@ -424,10 +378,6 @@
       align-items: center;
       justify-content: center;
       flex-shrink: 0;
-    }
-
-    .chip-avatar.cust-avatar {
-      background: #047857;
     }
 
     .chip-name {
@@ -532,25 +482,12 @@
   <!-- Main Center Content -->
   <main class="portal-main">
     <div class="login-card">
-
-      <!-- Role Switcher Tabs -->
-      <div class="auth-role-tabs" id="authRoleTabs" role="tablist">
-        <button type="button" class="role-tab active" id="tabStaff" data-role="staff" role="tab" aria-selected="true">
-          <i class="fa-solid fa-id-badge"></i>
-          <span>Employee Login</span>
-        </button>
-        <button type="button" class="role-tab" id="tabCustomer" data-role="customer" role="tab" aria-selected="false">
-          <i class="fa-solid fa-building-columns"></i>
-          <span>Customer Login</span>
-        </button>
-      </div>
-
       <div class="card-brand-row">
-        <div class="card-shield-icon" id="cardShieldIcon">
-          <i class="fa-solid fa-user-shield" id="cardShieldFaIcon"></i>
+        <div class="card-shield-icon">
+          <i class="fa-solid fa-user-shield"></i>
         </div>
-        <h2 id="cardTitle">Staff Authentication</h2>
-        <p id="cardSubtitle">Please enter your authorized employee credentials.</p>
+        <h2>Staff Authentication</h2>
+        <p>Please enter your authorized employee credentials.</p>
       </div>
 
       <!-- Alert Notification Box -->
@@ -559,11 +496,11 @@
         <span id="alertMessage">Invalid employee ID or password</span>
       </div>
 
-      <form id="authLoginForm" autocomplete="on">
+      <form id="staffLoginForm" autocomplete="on">
         <div class="form-group">
-          <label for="usernameInput" id="usernameLabel">Employee Username / Work Email</label>
+          <label for="usernameInput">Employee Username / Work Email</label>
           <div class="input-wrapper">
-            <i class="fa-solid fa-user prefix-icon" id="userPrefixIcon"></i>
+            <i class="fa-solid fa-user prefix-icon"></i>
             <input 
               type="text" 
               id="usernameInput" 
@@ -576,7 +513,7 @@
         </div>
 
         <div class="form-group">
-          <label for="passwordInput" id="passwordLabel">Security Password</label>
+          <label for="passwordInput">Security Password</label>
           <div class="input-wrapper">
             <i class="fa-solid fa-key prefix-icon"></i>
             <input 
@@ -595,9 +532,9 @@
         <div class="form-options">
           <label class="remember-check">
             <input type="checkbox" id="rememberMe" checked>
-            <span id="rememberLabel">Remember Employee ID</span>
+            <span>Remember Employee ID</span>
           </label>
-          <span style="color: var(--text-dim); font-size: 11.5px;" id="domainIndicator">Domain: <strong>INTERNAL_HQ</strong></span>
+          <span style="color: var(--text-dim); font-size: 11.5px;">Domain: <strong>INTERNAL_HQ</strong></span>
         </div>
 
         <button type="submit" class="btn-signin" id="btnSubmitLogin">
@@ -606,15 +543,15 @@
         </button>
       </form>
 
-      <!-- Quick Demo Switcher for Staff -->
-      <div class="quick-demo-section" id="staffDemoSection">
+      <!-- Quick Demo Switcher -->
+      <div class="quick-demo-section">
         <div class="quick-demo-title">
           <span><i class="fa-solid fa-users"></i> Demo Staff Accounts:</span>
           <span style="font-weight: 500; text-transform: none; color: #0284c7;">Click to login</span>
         </div>
 
         <div class="demo-chips-grid">
-          <button type="button" class="demo-chip" data-role="staff" data-user="investigator3" data-pass="Password@123">
+          <button type="button" class="demo-chip" data-user="investigator3" data-pass="Password@123">
             <div class="chip-avatar">AM</div>
             <div>
               <div class="chip-name">Abhishek M.</div>
@@ -622,7 +559,7 @@
             </div>
           </button>
 
-          <button type="button" class="demo-chip" data-role="staff" data-user="manager" data-pass="Password@123">
+          <button type="button" class="demo-chip" data-user="manager" data-pass="Password@123">
             <div class="chip-avatar" style="background: #065f46;">VM</div>
             <div>
               <div class="chip-name">Vikram Malhotra</div>
@@ -630,7 +567,7 @@
             </div>
           </button>
 
-          <button type="button" class="demo-chip" data-role="staff" data-user="investigator2" data-pass="Password@123">
+          <button type="button" class="demo-chip" data-user="investigator2" data-pass="Password@123">
             <div class="chip-avatar" style="background: #92400e;">PB</div>
             <div>
               <div class="chip-name">Pooja Bansal</div>
@@ -638,7 +575,7 @@
             </div>
           </button>
 
-          <button type="button" class="demo-chip" data-role="staff" data-user="investigator1" data-pass="Password@123">
+          <button type="button" class="demo-chip" data-user="investigator1" data-pass="Password@123">
             <div class="chip-avatar" style="background: #831843;">SOC</div>
             <div>
               <div class="chip-name">SOC Operations</div>
@@ -647,49 +584,6 @@
           </button>
         </div>
       </div>
-
-      <!-- Quick Demo Switcher for Customer -->
-      <div class="quick-demo-section" id="customerDemoSection" style="display: none;">
-        <div class="quick-demo-title">
-          <span><i class="fa-solid fa-users-viewfinder"></i> Demo Customer Accounts:</span>
-          <span style="font-weight: 500; text-transform: none; color: #059669;">Click to login</span>
-        </div>
-
-        <div class="demo-chips-grid">
-          <button type="button" class="demo-chip" data-role="customer" data-user="rajesh.sharma" data-pass="Cust@123">
-            <div class="chip-avatar cust-avatar">RS</div>
-            <div>
-              <div class="chip-name">Rajesh Sharma</div>
-              <div class="chip-role">ACT-4091-8821</div>
-            </div>
-          </button>
-
-          <button type="button" class="demo-chip" data-role="customer" data-user="priya.patel" data-pass="Cust@123">
-            <div class="chip-avatar cust-avatar" style="background: #0891b2;">PP</div>
-            <div>
-              <div class="chip-name">Priya Patel</div>
-              <div class="chip-role">ACT-9921-4400</div>
-            </div>
-          </button>
-
-          <button type="button" class="demo-chip" data-role="customer" data-user="vikramaditya.singhania" data-pass="Cust@123">
-            <div class="chip-avatar cust-avatar" style="background: #4f46e5;">VS</div>
-            <div>
-              <div class="chip-name">Vikramaditya S.</div>
-              <div class="chip-role">ACT-3381-9920</div>
-            </div>
-          </button>
-
-          <button type="button" class="demo-chip" data-role="customer" data-user="rahul.deshmukh" data-pass="Cust@123">
-            <div class="chip-avatar cust-avatar" style="background: #c026d3;">RD</div>
-            <div>
-              <div class="chip-name">Rahul Deshmukh</div>
-              <div class="chip-role">ACT-3190-8844</div>
-            </div>
-          </button>
-        </div>
-      </div>
-
     </div>
   </main>
 
@@ -697,7 +591,7 @@
   <footer class="bank-footer">
     <div class="footer-left">
       <i class="fa-solid fa-lock" style="color: #059669;"></i>
-      <span>Dummy Bank Portal • Enterprise Gateway v3.4</span>
+      <span>Dummy Bank Portal • Enterprise Fraud Management Gateway v3.4</span>
     </div>
     <div class="footer-right">
       <span>RBI Cyber Security Guidelines Compliant</span>
@@ -708,22 +602,9 @@
 
   <script>
     document.addEventListener("DOMContentLoaded", () => {
-      let currentRole = "staff"; // 'staff' | 'customer'
-
-      const tabStaff = document.getElementById("tabStaff");
-      const tabCustomer = document.getElementById("tabCustomer");
-      const form = document.getElementById("authLoginForm");
+      const form = document.getElementById("staffLoginForm");
       const usernameInput = document.getElementById("usernameInput");
       const passwordInput = document.getElementById("passwordInput");
-      const usernameLabel = document.getElementById("usernameLabel");
-      const passwordLabel = document.getElementById("passwordLabel");
-      const userPrefixIcon = document.getElementById("userPrefixIcon");
-      const cardTitle = document.getElementById("cardTitle");
-      const cardSubtitle = document.getElementById("cardSubtitle");
-      const cardShieldIcon = document.getElementById("cardShieldIcon");
-      const cardShieldFaIcon = document.getElementById("cardShieldFaIcon");
-      const rememberLabel = document.getElementById("rememberLabel");
-      const domainIndicator = document.getElementById("domainIndicator");
       const btnSubmit = document.getElementById("btnSubmitLogin");
       const btnText = document.getElementById("btnText");
       const btnIcon = document.getElementById("btnIcon");
@@ -732,87 +613,16 @@
       const alertIcon = document.getElementById("alertIcon");
       const btnTogglePwd = document.getElementById("btnTogglePassword");
       const pwdEyeIcon = document.getElementById("pwdEyeIcon");
-      const staffDemoSection = document.getElementById("staffDemoSection");
-      const customerDemoSection = document.getElementById("customerDemoSection");
 
-      // Switch Role Function
-      function setRole(role) {
-        currentRole = role;
-        hideAlert();
-
-        if (role === "customer") {
-          tabStaff.classList.remove("active");
-          tabStaff.setAttribute("aria-selected", "false");
-          tabCustomer.classList.add("active");
-          tabCustomer.setAttribute("aria-selected", "true");
-
-          cardShieldIcon.style.background = "#ecfdf5";
-          cardShieldIcon.style.borderColor = "#a7f3d0";
-          cardShieldIcon.style.color = "#059669";
-          cardShieldFaIcon.className = "fa-solid fa-user-check";
-
-          cardTitle.textContent = "Customer NetBanking";
-          cardSubtitle.textContent = "Access your protected bank account and track active dispute requests.";
-          usernameLabel.textContent = "NetBanking Username / Email / Customer ID";
-          usernameInput.placeholder = "e.g. rajesh.sharma or priya.patel";
-          userPrefixIcon.className = "fa-solid fa-user-tag prefix-icon";
-          rememberLabel.textContent = "Remember Customer ID";
-          domainIndicator.innerHTML = "Portal: <strong>RETAIL_NETBANKING</strong>";
-          btnText.textContent = "Sign In to NetBanking";
-
-          staffDemoSection.style.display = "none";
-          customerDemoSection.style.display = "block";
-        } else {
-          tabCustomer.classList.remove("active");
-          tabCustomer.setAttribute("aria-selected", "false");
-          tabStaff.classList.add("active");
-          tabStaff.setAttribute("aria-selected", "true");
-
-          cardShieldIcon.style.background = "#eff6ff";
-          cardShieldIcon.style.borderColor = "#bfdbfe";
-          cardShieldIcon.style.color = "#0056b3";
-          cardShieldFaIcon.className = "fa-solid fa-user-shield";
-
-          cardTitle.textContent = "Staff Authentication";
-          cardSubtitle.textContent = "Please enter your authorized employee credentials.";
-          usernameLabel.textContent = "Employee Username / Work Email";
-          usernameInput.placeholder = "e.g. investigator3 or abhishek.m@bank.internal";
-          userPrefixIcon.className = "fa-solid fa-user prefix-icon";
-          rememberLabel.textContent = "Remember Employee ID";
-          domainIndicator.innerHTML = "Domain: <strong>INTERNAL_HQ</strong>";
-          btnText.textContent = "Sign In to Staff Portal";
-
-          staffDemoSection.style.display = "block";
-          customerDemoSection.style.display = "none";
-        }
-
-        usernameInput.focus();
-      }
-
-      tabStaff.addEventListener("click", () => setRole("staff"));
-      tabCustomer.addEventListener("click", () => setRole("customer"));
-
-      // Check existing session to pre-fill username
-      const existingUserType = localStorage.getItem("fraud_user_type");
-      if (existingUserType === "customer") {
-        setRole("customer");
-        const custSession = localStorage.getItem("fraud_customer_session");
-        if (custSession) {
-          try {
-            const parsed = JSON.parse(custSession);
-            if (parsed && parsed.username) usernameInput.value = parsed.username;
-          } catch(e) {}
-        }
-      } else {
-        const existingSession = localStorage.getItem("fraud_staff_session");
-        if (existingSession) {
-          try {
-            const parsed = JSON.parse(existingSession);
-            if (parsed && parsed.username && parsed.role !== "CUSTOMER") {
-              usernameInput.value = parsed.username;
-            }
-          } catch (e) {}
-        }
+      // Check existing session
+      const existingSession = localStorage.getItem("fraud_staff_session");
+      if (existingSession) {
+        try {
+          const parsed = JSON.parse(existingSession);
+          if (parsed && parsed.username) {
+            usernameInput.value = parsed.username;
+          }
+        } catch (e) {}
       }
 
       // Show/Hide Password
@@ -825,95 +635,60 @@
       // Quick Demo Click
       document.querySelectorAll(".demo-chip").forEach(btn => {
         btn.addEventListener("click", () => {
-          const role = btn.getAttribute("data-role") || "staff";
           const u = btn.getAttribute("data-user");
           const p = btn.getAttribute("data-pass");
-          if (role !== currentRole) {
-            setRole(role);
-          }
           usernameInput.value = u;
           passwordInput.value = p;
-          performLogin(u, p, role);
+          performLogin(u, p);
         });
       });
 
       // Form Submit
       form.addEventListener("submit", (e) => {
         e.preventDefault();
-        performLogin(usernameInput.value.trim(), passwordInput.value.trim(), currentRole);
+        performLogin(usernameInput.value.trim(), passwordInput.value.trim());
       });
 
-      async function performLogin(username, password, role) {
+      async function performLogin(username, password) {
         if (!username || !password) {
-          showAlert(role === "customer" ? "Please enter your Customer Username and Password." : "Please enter your Employee Username and Password.", "error");
+          showAlert("Please enter your employee username and password.", "error");
           return;
         }
 
         hideAlert();
-        setLoading(true, role);
+        setLoading(true);
 
         try {
-          if (role === "customer") {
-            // Customer Login (queries PostgreSQL 'customers' directly - zero T4 triggers)
-            const res = await fetch("/api/customer/login", {
-              method: "POST",
-              headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({ username, password })
-            });
+          const res = await fetch("/api/auth/login", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ username, password })
+          });
 
-            const data = await res.json();
+          const data = await res.json();
 
-            if (!res.ok || !data.success) {
-              throw new Error(data.detail || data.message || "Invalid customer credentials.");
-            }
-
-            showAlert(`NetBanking authenticated. Welcome, ${data.customer.customer_name}!`, "success");
-
-            localStorage.setItem("fraud_user_type", "customer");
-            localStorage.setItem("fraud_customer_session", JSON.stringify(data.customer));
-            if (data.token) {
-              localStorage.setItem("fraud_customer_token", data.token);
-            }
-
-            localStorage.removeItem("fraud_staff_session");
-            localStorage.removeItem("fraud_staff_token");
-
-            setTimeout(() => {
-              window.location.href = "/customer";
-            }, 400);
-
-          } else {
-            // Staff / Employee Login (queries PostgreSQL 'staff_users' directly - zero T4 triggers)
-            const res = await fetch("/api/auth/login", {
-              method: "POST",
-              headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({ username, password })
-            });
-
-            const data = await res.json();
-
-            if (!res.ok || !data.success) {
-              throw new Error(data.detail || data.message || "Invalid employee credentials.");
-            }
-
-            showAlert(`Staff authentication verified. Welcome, ${data.user.full_name}!`, "success");
-            
-            localStorage.setItem("fraud_user_type", "staff");
-            localStorage.setItem("fraud_staff_session", JSON.stringify(data.user));
-            if (data.token) {
-              localStorage.setItem("fraud_staff_token", data.token);
-            }
-            localStorage.removeItem("fraud_customer_session");
-            localStorage.removeItem("fraud_customer_token");
-
-            setTimeout(() => {
-              window.location.href = "/";
-            }, 400);
+          if (!res.ok || !data.success) {
+            throw new Error(data.detail || data.message || "Invalid employee credentials.");
           }
+
+          showAlert(`Authentication verified. Welcome, ${data.user.full_name}!`, "success");
+          
+          // Save session
+          localStorage.setItem("fraud_staff_session", JSON.stringify(data.user));
+          if (data.token) {
+            localStorage.setItem("fraud_staff_token", data.token);
+          }
+          localStorage.removeItem("fraud_customer_session");
+          localStorage.removeItem("fraud_customer_token");
+          localStorage.removeItem("fraud_user_type");
+
+          setTimeout(() => {
+            window.location.href = "/";
+          }, 400);
 
         } catch (err) {
           showAlert(err.message, "error");
-          setLoading(false, role);
+          setLoading(false);
         }
       }
 
@@ -928,13 +703,13 @@
         alertBox.style.display = "none";
       }
 
-      function setLoading(isLoading, role) {
+      function setLoading(isLoading) {
         btnSubmit.disabled = isLoading;
         if (isLoading) {
           btnText.textContent = "Verifying Credentials...";
           btnIcon.className = "spinner";
         } else {
-          btnText.textContent = role === "customer" ? "Sign In to NetBanking" : "Sign In to Staff Portal";
+          btnText.textContent = "Sign In to Dashboard";
           btnIcon.className = "fa-solid fa-arrow-right";
         }
       }

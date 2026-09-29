@@ -19,21 +19,10 @@ let recentTxData = [];
 let selectedTicketIds = new Set();
 let currentDossierTicket = null;
 
-// User Authentication Session (Employee & Customer)
+// Staff Authentication Session
 let currentStaffUser = null;
-let currentCustomerUser = null;
-let currentUserType = "staff";
 
 function checkAuthSession() {
-  const userType = localStorage.getItem("fraud_user_type") || "staff";
-  currentUserType = userType;
-
-  // Customers must NOT see the internal staff fraud ticket portal
-  if (userType === "customer") {
-    window.location.href = "/customer";
-    return false;
-  }
-
   const sessionStr = localStorage.getItem("fraud_staff_session");
   if (!sessionStr) {
     window.location.href = "/login";
@@ -42,7 +31,7 @@ function checkAuthSession() {
 
   try {
     currentStaffUser = JSON.parse(sessionStr);
-    if (!currentStaffUser || !currentStaffUser.full_name || currentStaffUser.role === "CUSTOMER") {
+    if (!currentStaffUser || !currentStaffUser.full_name) {
       window.location.href = "/login";
       return false;
     }
@@ -52,15 +41,7 @@ function checkAuthSession() {
   }
 
   const fullName = currentStaffUser.full_name || "Staff Officer";
-      roleName = currentStaffUser.role === "MANAGER" ? "Branch Manager (All Access)" : (currentStaffUser.department || (currentStaffUser.role === "CUSTOMER" ? "Retail Banking Customer" : "Fraud Investigator"));
-    } catch (e) {
-      window.location.href = "/login";
-      return false;
-    }
-  } else {
-    window.location.href = "/login";
-    return false;
-  }
+  const roleName = currentStaffUser.role === "MANAGER" ? "Branch Manager (All Access)" : (currentStaffUser.department || "Fraud Investigator");
 
   // Update Header & Home Hero User Profile UI
   const nameEl = document.getElementById("headerUserName");
@@ -89,9 +70,6 @@ function handleStaffLogout() {
   if (confirm("Sign out from the Dummy Bank Portal?")) {
     localStorage.removeItem("fraud_staff_session");
     localStorage.removeItem("fraud_staff_token");
-    localStorage.removeItem("fraud_customer_session");
-    localStorage.removeItem("fraud_customer_token");
-    localStorage.removeItem("fraud_user_type");
     window.location.href = "/login";
   }
 }
