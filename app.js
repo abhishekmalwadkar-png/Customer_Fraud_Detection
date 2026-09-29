@@ -1383,7 +1383,7 @@ async function handleFreezeAction() {
   document.getElementById("drawerOverlay").classList.remove("open");
 
   try {
-    const res = await fetch("/api/freeze-account", {
+    const res = await fetch("/api/workflow/block-account", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ account_number: accNum, ticket_number: ticketNum })

@@ -1255,17 +1255,6 @@ async def api_create_fraud_ticket(request: Request):
         elif isinstance(payload, dict):
             # Run blocking database I/O asynchronously in threadpool with Idempotency Key protection
             result = await asyncio.to_thread(_sync_insert_single_ticket, payload, client_ip)
-            if isinstance(result, dict) and result.get("ticket_number") and not result.get("idempotent_replay"):
-                # Non-blocking trigger of AutomationEdge Raise Fraud Workflow
-                asyncio.create_task(trigger_automationedge_workflow(AE_WORKFLOW_RAISE_FRAUD, {
-                    "ticket_number": result.get("ticket_number"),
-                    "ticket_id": result.get("ticket_id"),
-                    "customer_name": result.get("customer_name"),
-                    "account_number": result.get("account_number"),
-                    "amount_involved": result.get("amount_involved"),
-                    "incident_type": result.get("incident_type"),
-                    "action": "RAISE_FRAUD"
-                }))
             return result
         else:
             raise HTTPException(status_code=400, detail="Invalid payload format. Expected JSON object or array.")
@@ -1354,30 +1343,11 @@ async def api_update_ticket(ticket_id: str, payload: FraudTicketUpdateSchema, re
 
         conn.commit()
 
-        # AutomationEdge Workflow Triggers
-        ae_dispatch = None
-        if status_val == "FROZEN":
-            ae_dispatch = await trigger_automationedge_workflow(AE_WORKFLOW_FREEZE_ACCOUNT, {
-                "account_number": acc_num,
-                "ticket_number": ticket_num,
-                "action": "FREEZE_ACCOUNT",
-                "actor": actor
-            })
-        elif status_val == "RESOLVED":
-            ae_dispatch = await trigger_automationedge_workflow(AE_WORKFLOW_RESOLVE_TICKET, {
-                "ticket_number": ticket_num,
-                "account_number": acc_num,
-                "recovered_amount": float(rec_amt or amt_inv or 0.0),
-                "action": "RESOLVE_TICKET",
-                "actor": actor
-            })
-
         return {
             "success": True, 
             "ticket_number": ticket_num, 
             "status": status_val, 
-            "assigned_investigator": new_assigned,
-            "ae_integration": ae_dispatch
+            "assigned_investigator": new_assigned
         }
     finally:
         cursor.close()
@@ -1472,19 +1442,6 @@ async def api_resolve_ticket(
 
         conn.commit()
 
-        # Trigger AutomationEdge ResolveTicket Workflow
-        ae_dispatch = await trigger_automationedge_workflow(AE_WORKFLOW_RESOLVE_TICKET, {
-            "ticket_number": t_num,
-            "ticket_id": t_id,
-            "customer_name": cust_name,
-            "account_number": acc_num,
-            "amount_involved": float(amt_inv),
-            "recovered_amount": float(rec_done),
-            "action_taken": note,
-            "action": "RESOLVE_TICKET",
-            "actor": actor
-        })
-
         return {
             "success": True,
             "ticket_id": t_id,
@@ -1495,8 +1452,7 @@ async def api_resolve_ticket(
             "amount_involved": float(amt_inv),
             "recovered_amount": float(rec_done),
             "action_taken": note,
-            "ae_integration": ae_dispatch,
-            "message": f"Fraud ticket {t_num} marked as RESOLVED and AutomationEdge '{AE_WORKFLOW_RESOLVE_TICKET}' workflow triggered."
+            "message": f"Fraud ticket {t_num} marked as RESOLVED."
         }
     except Exception as exc:
         conn.rollback()
@@ -1552,24 +1508,6 @@ async def api_bulk_update_tickets(payload: BulkTicketUpdateSchema, request: Requ
 
         conn.commit()
 
-        # Batch trigger AE workflows if applicable
-        if status_val == "FROZEN":
-            for r in rows:
-                asyncio.create_task(trigger_automationedge_workflow(AE_WORKFLOW_FREEZE_ACCOUNT, {
-                    "account_number": r[2],
-                    "ticket_number": r[0],
-                    "action": "FREEZE_ACCOUNT",
-                    "actor": actor
-                }))
-        elif status_val == "RESOLVED":
-            for r in rows:
-                asyncio.create_task(trigger_automationedge_workflow(AE_WORKFLOW_RESOLVE_TICKET, {
-                    "ticket_number": r[0],
-                    "account_number": r[2],
-                    "action": "RESOLVE_TICKET",
-                    "actor": actor
-                }))
-
         return {"success": True, "updated_count": updated_count}
     finally:
         cursor.close()
@@ -1578,9 +1516,9 @@ async def api_bulk_update_tickets(payload: BulkTicketUpdateSchema, request: Requ
 @app.api_route("/api/freeze-account", methods=["GET", "POST"], tags=["Account Actions"])
 async def api_freeze_account(request: Request):
     """
-    Emergency lock an account and linked fraud case.
-    Automatically triggers AutomationEdge 'freezeaccount' workflow.
-    Accepts JSON body, raw string, form data, or URL query parameters via GET/POST.
+    Lock an account and linked fraud cases in PostgreSQL.
+    Called directly by the AutomationEdge workflow or API integrations to freeze records.
+    (Does NOT trigger AutomationEdge workflow to prevent recursive execution loops).
     """
     import re
     acc_num = None
@@ -1667,29 +1605,20 @@ async def api_freeze_account(request: Request):
             """, (acc_num, f"%{acc_num}%"))
 
         client_ip = request.client.host if request.client else "127.0.0.1"
-        actor = request.headers.get("X-User-Name") or DEFAULT_INVESTIGATOR
+        actor = request.headers.get("X-User-Name") or "AutomationEdge / Core Banking"
         cursor.execute("""
             INSERT INTO audit_logs (ticket_number, customer_name, actor, action, details, ip_address)
             VALUES (%s, %s, %s, %s, %s, %s);
-        """, (ticket_num or "MANUAL_LOCK", "Account Owner", actor, "ACCOUNT_EMERGENCY_FREEZE", f"Account {acc_num} frozen due to fraud risk (Resolved tickets preserved)", client_ip))
+        """, (ticket_num or "MANUAL_LOCK", "Account Owner", actor, "ACCOUNT_EMERGENCY_FREEZE", f"Account {acc_num} frozen in core database (Resolved tickets preserved)", client_ip))
 
         conn.commit()
-
-        # Trigger AutomationEdge FreezeAccount Workflow
-        ae_dispatch = await trigger_automationedge_workflow(AE_WORKFLOW_FREEZE_ACCOUNT, {
-            "account_number": acc_num,
-            "ticket_number": ticket_num,
-            "action": "FREEZE_ACCOUNT",
-            "actor": actor
-        })
 
         return {
             "success": True, 
             "account_number": acc_num, 
             "ticket_number": ticket_num,
             "status": "FROZEN",
-            "ae_integration": ae_dispatch,
-            "message": f"Bank account {acc_num} locked. (Any already resolved tickets remain in history as RESOLVED)."
+            "message": f"Bank account {acc_num} locked in database. (Any already resolved tickets remain in history as RESOLVED)."
         }
     except Exception as exc:
         conn.rollback()
@@ -1697,6 +1626,61 @@ async def api_freeze_account(request: Request):
     finally:
         cursor.close()
         conn.close()
+
+@app.post("/api/workflow/block-account", tags=["Workflow Automation"])
+async def api_trigger_block_account_workflow(request: Request):
+    """
+    Explicit UI action: Triggered ONLY when a user selects a ticket and clicks 'Block Account' on the UI.
+    Dispatches AutomationEdge 'BlockBankAccount' workflow to T4 Cloud Server passing {ticket_number, account_number}.
+    """
+    try:
+        body = await request.json()
+    except Exception:
+        body = {}
+    
+    acc_num = body.get("account_number") or body.get("account_no")
+    ticket_num = body.get("ticket_number") or body.get("ticket_no")
+    actor = request.headers.get("X-User-Name") or DEFAULT_INVESTIGATOR
+
+    if not acc_num and not ticket_num:
+        raise HTTPException(status_code=400, detail="Missing account_number or ticket_number")
+
+    # 1. Update DB optimistically
+    conn = get_db_connection()
+    conn.autocommit = True
+    cursor = conn.cursor()
+    try:
+        if acc_num:
+            cursor.execute("UPDATE customer_accounts SET status = 'FROZEN' WHERE account_number = %s OR account_number ILIKE %s;", (acc_num, f"%{acc_num}%"))
+        if ticket_num:
+            cursor.execute("""
+                UPDATE fraud_tickets 
+                SET status = 'FROZEN', updated_at = CURRENT_TIMESTAMP 
+                WHERE (ticket_number = %s OR ticket_number ILIKE %s) 
+                  AND status NOT IN ('RESOLVED', 'CLOSED', 'REJECTED');
+            """, (ticket_num, f"%{ticket_num}%"))
+            cursor.execute("""
+                INSERT INTO audit_logs (ticket_number, customer_name, actor, action, details, ip_address)
+                VALUES (%s, %s, %s, %s, %s, %s);
+            """, (ticket_num, "Account Owner", actor, "TRIGGER_AE_BLOCK_ACCOUNT", f"Dispatched T4 workflow '{AE_WORKFLOW_FREEZE_ACCOUNT}' for account {acc_num}", request.client.host if request.client else "127.0.0.1"))
+    finally:
+        cursor.close()
+        conn.close()
+
+    # 2. Trigger T4 AutomationEdge workflow ONCE
+    ae_dispatch = await trigger_automationedge_workflow(AE_WORKFLOW_FREEZE_ACCOUNT, {
+        "ticket_number": ticket_num or "",
+        "account_number": acc_num or ""
+    })
+
+    return {
+        "success": True,
+        "workflow": AE_WORKFLOW_FREEZE_ACCOUNT,
+        "ticket_number": ticket_num,
+        "account_number": acc_num,
+        "ae_integration": ae_dispatch,
+        "message": f"AutomationEdge workflow '{AE_WORKFLOW_FREEZE_ACCOUNT}' dispatched for ticket {ticket_num} (Account: {acc_num})."
+    }
 
 @app.api_route("/api/unfreeze-account", methods=["GET", "POST"], tags=["Account Actions"])
 async def api_unfreeze_account(request: Request):
