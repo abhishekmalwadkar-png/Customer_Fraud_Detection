@@ -138,11 +138,20 @@ def _call_ae_workflow_sync(workflow_name: str, parameters: dict) -> dict:
     token = _get_ae_session_token()
 
     endpoint = f"{AE_SERVER_URL.rstrip('/')}/rest/execute"
+    
+    # Format parameters for AutomationEdge (name/value list is standard on AE Cloud)
+    param_list = []
+    if isinstance(parameters, dict):
+        for k, v in parameters.items():
+            if v is not None:
+                param_list.append({"name": str(k), "value": str(v)})
+    elif isinstance(parameters, list):
+        param_list = parameters
+
     payload = {
         "orgCode": AE_ORG_CODE,
         "workflowName": workflow_name,
-        "userId": AE_USERNAME,
-        "params": parameters
+        "params": param_list
     }
 
     headers = {
@@ -158,23 +167,24 @@ def _call_ae_workflow_sync(workflow_name: str, parameters: dict) -> dict:
         headers["Authorization"] = f"Basic {base64.b64encode(auth_str.encode('utf-8')).decode('utf-8')}"
 
     try:
-        logger.info(f"[AutomationEdge] Dispatching published workflow '{workflow_name}' to AE Server ({endpoint})...")
-        resp = requests.post(endpoint, json=payload, headers=headers, timeout=3.0)
+        logger.info(f"[AutomationEdge] Dispatching workflow '{workflow_name}' to T4 AE Server ({endpoint}) with params: {param_list}...")
+        resp = requests.post(endpoint, json=payload, headers=headers, timeout=5.0)
         
         if resp.status_code in (200, 201, 202):
             try:
                 resp_json = resp.json()
             except Exception:
                 resp_json = {"raw": resp.text}
-            logger.info(f"[AutomationEdge] Workflow '{workflow_name}' acknowledged by AE server: {resp_json}")
+            logger.info(f"[AutomationEdge] Workflow '{workflow_name}' acknowledged by T4 AE server: {resp_json}")
             return {
                 "success": True,
                 "status": "QUEUED_ON_AE_SERVER",
                 "workflow": workflow_name,
                 "ae_server_url": AE_SERVER_URL,
                 "org_code": AE_ORG_CODE,
+                "automation_request_id": resp_json.get("automationRequestId"),
                 "response": resp_json,
-                "message": f"Workflow '{workflow_name}' successfully triggered on AutomationEdge Server."
+                "message": f"Workflow '{workflow_name}' successfully triggered on AutomationEdge T4 Server (Request ID: {resp_json.get('automationRequestId')})."
             }
         else:
             logger.info(f"[AutomationEdge] Published workflow '{workflow_name}' dispatched to AE server (HTTP {resp.status_code}).")

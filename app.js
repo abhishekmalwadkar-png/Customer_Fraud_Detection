@@ -1390,7 +1390,11 @@ async function handleFreezeAction() {
     });
     const data = await res.json();
     if (data.success) {
-      showToast(`Account ${accNum} blocked. AutomationEdge 'freezeaccount' workflow dispatched!`, "warning");
+      const reqId = data.ae_integration?.automation_request_id || data.ae_integration?.response?.automationRequestId;
+      const msg = reqId 
+        ? `⚡ Account ${accNum} blocked! T4 AutomationEdge 'BlockBankAccount' triggered (Req #${reqId})` 
+        : `⚡ Account ${accNum} blocked! AutomationEdge 'BlockBankAccount' workflow dispatched.`;
+      showToast(msg, "warning");
       loadAllData();
     }
   } catch (err) {
