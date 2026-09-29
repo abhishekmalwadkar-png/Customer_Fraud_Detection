@@ -875,20 +875,11 @@
               localStorage.setItem("fraud_customer_token", data.token);
             }
 
-            // Sync normalized session for dashboard compatibility
-            const normalizedStaffSession = {
-              user_id: data.customer.customer_id,
-              username: data.customer.username,
-              full_name: data.customer.customer_name,
-              role: "CUSTOMER",
-              department: "Retail NetBanking",
-              email: data.customer.email,
-              accounts: data.customer.accounts || []
-            };
-            localStorage.setItem("fraud_staff_session", JSON.stringify(normalizedStaffSession));
+            localStorage.removeItem("fraud_staff_session");
+            localStorage.removeItem("fraud_staff_token");
 
             setTimeout(() => {
-              window.location.href = "/";
+              window.location.href = "/customer";
             }, 400);
 
           } else {

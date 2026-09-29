@@ -435,6 +435,14 @@ async def serve_login():
         return FileResponse("login.html", media_type="text/html")
     return HTMLResponse("<h2>Login Page Under Construction</h2>", status_code=200)
 
+@app.get("/customer", include_in_schema=False)
+@app.get("/customer.html", include_in_schema=False)
+@app.get("/netbanking", include_in_schema=False)
+async def serve_customer():
+    if os.path.exists("customer.html"):
+        return FileResponse("customer.html", media_type="text/html")
+    return HTMLResponse("<h2>Customer NetBanking Portal Under Construction</h2>", status_code=200)
+
 @app.get("/", include_in_schema=False)
 async def serve_index():
     if os.path.exists("index.html"):
@@ -906,39 +914,280 @@ def api_customer_login(payload: CustomerLoginSchema, request: Request):
         cursor.close()
         conn.close()
 
-@app.get("/api/customer/credentials-directory", tags=["Customer Authentication"])
-def api_customer_credentials_directory():
+@app.get("/api/customer/portal-data", tags=["Customer Portal"])
+def api_customer_portal_data(customer_id: Optional[int] = None, username: Optional[str] = None):
     """
-    Helpful testing directory of active customer accounts and credentials for AutomationEdge Process Studio developers.
+    Dedicated NetBanking dashboard data for retail customers.
+    Fetches customer profile, linked accounts, recent transactions, and active disputes.
+    Pure PostgreSQL queries - Zero T4 interaction.
     """
+    if not customer_id and not username:
+        raise HTTPException(status_code=400, detail="Missing customer_id or username parameter.")
+
     conn = get_db_connection()
     cursor = conn.cursor()
     try:
+        if customer_id:
+            cursor.execute("""
+                SELECT customer_id, customer_code, customer_name, full_name, email, phone, address, city, state, country, kyc_status, risk_tier, username
+                FROM customers WHERE customer_id = %s;
+            """, (customer_id,))
+        else:
+            cursor.execute("""
+                SELECT customer_id, customer_code, customer_name, full_name, email, phone, address, city, state, country, kyc_status, risk_tier, username
+                FROM customers WHERE LOWER(username) = LOWER(%s) OR LOWER(email) = LOWER(%s);
+            """, (username, username))
+
+        c_row = cursor.fetchone()
+        if not c_row:
+            raise HTTPException(status_code=404, detail="Customer not found in banking database.")
+
+        cid, ccode, cname, fname, email, phone, addr, city, state, country, kyc, risk, uname = c_row
+
+        # Get all linked accounts
         cursor.execute("""
-            SELECT c.customer_id, c.customer_name, c.username, c.plain_password, c.email, a.account_number, a.status
-            FROM customers c
-            JOIN customer_accounts a ON c.customer_id = a.customer_id
-            WHERE c.username IS NOT NULL
-            ORDER BY c.customer_id
-            LIMIT 25;
-        """)
-        rows = cursor.fetchall()
-        res_list = []
-        for r in rows:
-            pwd = r[3] or "Cust@123"
-            cred_str = f"{r[2]}:{pwd}"
-            b64_header = f"Basic {base64.b64encode(cred_str.encode('utf-8')).decode('utf-8')}"
-            res_list.append({
-                "customer_id": r[0],
-                "customer_name": r[1],
-                "username": r[2],
-                "password": pwd,
-                "email": r[4],
-                "account_number": r[5],
-                "account_status": r[6],
-                "basic_auth_header": b64_header
+            SELECT account_id, account_number, account_type, balance, currency, status, branch, opened_date
+            FROM customer_accounts
+            WHERE customer_id = %s
+            ORDER BY account_id ASC;
+        """, (cid,))
+        acc_rows = cursor.fetchall()
+        accounts = []
+        acc_numbers = []
+        total_balance = 0.0
+        active_count = 0
+        frozen_count = 0
+
+        for r in acc_rows:
+            bal = float(r[3])
+            st = r[5]
+            accounts.append({
+                "account_id": r[0],
+                "account_number": r[1],
+                "account_type": r[2],
+                "balance": bal,
+                "currency": r[4] or "INR",
+                "status": st,
+                "branch": r[6],
+                "opened_date": str(r[7]) if r[7] else "2024-01-15"
             })
-        return res_list
+            acc_numbers.append(r[1])
+            total_balance += bal
+            if st.upper() == "ACTIVE":
+                active_count += 1
+            else:
+                frozen_count += 1
+
+        # Get recent transactions for all accounts
+        transactions = []
+        if acc_numbers:
+            cursor.execute("""
+                SELECT txn_id, txn_reference, account_number, amount, txn_type, merchant_or_recipient, channel, ip_address, geo_location, is_fraud_flagged, fraud_risk_score, status, txn_time
+                FROM transactions
+                WHERE account_number = ANY(%s) OR customer_id = %s
+                ORDER BY txn_time DESC
+                LIMIT 50;
+            """, (acc_numbers, cid))
+            t_rows = cursor.fetchall()
+            for tr in t_rows:
+                transactions.append({
+                    "txn_id": tr[0],
+                    "txn_reference": tr[1],
+                    "account_number": tr[2],
+                    "amount": float(tr[3]),
+                    "txn_type": tr[4],
+                    "merchant_or_recipient": tr[5],
+                    "channel": tr[6],
+                    "ip_address": tr[7],
+                    "geo_location": tr[8],
+                    "is_fraud_flagged": bool(tr[9]),
+                    "fraud_risk_score": tr[10],
+                    "status": tr[11],
+                    "txn_time": tr[12].strftime("%d %b %Y, %I:%M %p") if hasattr(tr[12], 'strftime') else str(tr[12])
+                })
+
+        # Get customer's fraud disputes / tickets
+        tickets = []
+        cursor.execute("""
+            SELECT ticket_id, ticket_number, account_number, incident_type, amount_involved, recovered_amount, incident_date, reported_channel, severity, status, assigned_investigator, description, action_taken
+            FROM fraud_tickets
+            WHERE customer_id = %s OR account_number = ANY(%s)
+            ORDER BY incident_date DESC;
+        """, (cid, acc_numbers if acc_numbers else ['NONE']))
+        tk_rows = cursor.fetchall()
+        for tk in tk_rows:
+            tickets.append({
+                "ticket_id": tk[0],
+                "ticket_number": tk[1],
+                "account_number": tk[2],
+                "incident_type": tk[3],
+                "amount_involved": float(tk[4]),
+                "recovered_amount": float(tk[5] or 0),
+                "incident_date": tk[6].strftime("%d %b %Y, %I:%M %p") if hasattr(tk[6], 'strftime') else str(tk[6]),
+                "reported_channel": tk[7],
+                "severity": tk[8],
+                "status": tk[9],
+                "assigned_investigator": tk[10],
+                "description": tk[11],
+                "action_taken": tk[12]
+            })
+
+        return {
+            "success": True,
+            "customer": {
+                "customer_id": cid,
+                "customer_code": ccode,
+                "customer_name": cname,
+                "full_name": fname,
+                "email": email,
+                "phone": phone,
+                "address": addr,
+                "city": city,
+                "state": state,
+                "country": country,
+                "kyc_status": kyc,
+                "risk_tier": risk,
+                "username": uname
+            },
+            "summary": {
+                "total_balance": total_balance,
+                "accounts_count": len(accounts),
+                "active_accounts_count": active_count,
+                "frozen_accounts_count": frozen_count,
+                "active_disputes_count": len([t for t in tickets if t["status"] not in ("RESOLVED", "REJECTED", "CLOSED")])
+            },
+            "accounts": accounts,
+            "transactions": transactions,
+            "disputes": tickets
+        }
+    finally:
+        cursor.close()
+        conn.close()
+
+
+@app.post("/api/customer/toggle-account-freeze", tags=["Customer Portal"])
+async def api_customer_toggle_account_freeze(request: Request):
+    """
+    Allow customer to freeze/lock or unfreeze their own bank account instantly.
+    Direct PostgreSQL execution - Zero T4 interaction.
+    """
+    try:
+        body = await request.json()
+    except Exception:
+        raise HTTPException(status_code=400, detail="Invalid JSON payload.")
+
+    acc_num = body.get("account_number", "").strip()
+    cust_id = body.get("customer_id")
+    action = body.get("action", "FREEZE").strip().upper()  # FREEZE | UNFREEZE
+
+    if not acc_num:
+        raise HTTPException(status_code=400, detail="Missing account_number parameter.")
+
+    new_status = "FROZEN" if action == "FREEZE" else "ACTIVE"
+
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    try:
+        # Verify account ownership
+        if cust_id:
+            cursor.execute("SELECT customer_id, customer_name, status FROM customer_accounts WHERE account_number = %s AND customer_id = %s;", (acc_num, cust_id))
+        else:
+            cursor.execute("SELECT customer_id, customer_name, status FROM customer_accounts WHERE account_number = %s;", (acc_num,))
+
+        row = cursor.fetchone()
+        if not row:
+            raise HTTPException(status_code=404, detail="Bank account not found or does not belong to the customer.")
+
+        cid, cname, current_st = row
+
+        cursor.execute("UPDATE customer_accounts SET status = %s WHERE account_number = %s;", (new_status, acc_num))
+
+        client_ip = request.client.host if request.client else "127.0.0.1"
+        cursor.execute("""
+            INSERT INTO audit_logs (customer_name, actor, action, details, ip_address)
+            VALUES (%s, %s, %s, %s, %s);
+        """, (cname, f"Customer ({cname})", f"CUSTOMER_ACCOUNT_{action}", f"Customer {cname} changed account {acc_num} status to {new_status}.", client_ip))
+
+        conn.commit()
+        return {
+            "success": True,
+            "account_number": acc_num,
+            "previous_status": current_st,
+            "status": new_status,
+            "message": f"Account {acc_num} has been successfully {new_status.lower()}."
+        }
+    finally:
+        cursor.close()
+        conn.close()
+
+
+@app.post("/api/customer/report-dispute", tags=["Customer Portal"])
+async def api_customer_report_dispute(request: Request):
+    """
+    Allow customer to report an unauthorized transaction or raise a fraud dispute for their account.
+    Direct PostgreSQL insertion - Zero T4 interaction.
+    """
+    try:
+        body = await request.json()
+    except Exception:
+        raise HTTPException(status_code=400, detail="Invalid JSON payload.")
+
+    cust_id = body.get("customer_id")
+    acc_num = body.get("account_number", "").strip()
+    incident_type = body.get("incident_type", "Unauthorized Transaction Dispute").strip()
+    amount = float(body.get("amount", 0.0))
+    desc = body.get("description", "Dispute raised by customer via NetBanking Portal.").strip()
+    merchant = body.get("merchant_or_recipient", "Unknown Suspicious Merchant").strip()
+
+    if not acc_num:
+        raise HTTPException(status_code=400, detail="Missing account_number.")
+
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    try:
+        # Verify account and get customer info
+        if cust_id:
+            cursor.execute("SELECT customer_id, customer_name FROM customer_accounts WHERE account_number = %s AND customer_id = %s;", (acc_num, cust_id))
+        else:
+            cursor.execute("SELECT customer_id, customer_name FROM customer_accounts WHERE account_number = %s;", (acc_num,))
+
+        row = cursor.fetchone()
+        if not row:
+            raise HTTPException(status_code=404, detail="Bank account not found.")
+
+        cid, cname = row
+        ticket_number = f"FRD-2026-{uuid.uuid4().hex[:8].upper()}"
+
+        cursor.execute("""
+            INSERT INTO fraud_tickets (
+                ticket_number, customer_id, customer_name, account_number,
+                incident_type, amount_involved, recovered_amount, incident_date,
+                reported_channel, severity, status, assigned_investigator,
+                suspect_entity, description, action_taken
+            ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+            RETURNING ticket_id;
+        """, (
+            ticket_number, cid, cname, acc_num,
+            incident_type, amount, 0.0, datetime.now(),
+            "Customer NetBanking Portal", "HIGH", "UNDER_INVESTIGATION", "High-Value Fraud Forensics",
+            merchant, desc, "Dispute registered via Customer NetBanking; Assigned to Forensics team."
+        ))
+        new_id = cursor.fetchone()[0]
+
+        client_ip = request.client.host if request.client else "127.0.0.1"
+        cursor.execute("""
+            INSERT INTO audit_logs (ticket_number, customer_name, actor, action, details, ip_address)
+            VALUES (%s, %s, %s, %s, %s, %s);
+        """, (ticket_number, cname, f"Customer ({cname})", "CUSTOMER_DISPUTE_FILED", f"Dispute ticket {ticket_number} created by customer for account {acc_num} (₹{amount:,.2f}).", client_ip))
+
+        conn.commit()
+        return {
+            "success": True,
+            "ticket_id": new_id,
+            "ticket_number": ticket_number,
+            "status": "UNDER_INVESTIGATION",
+            "message": f"Fraud dispute ticket {ticket_number} successfully registered and forwarded to Fraud Forensics."
+        }
     finally:
         cursor.close()
         conn.close()

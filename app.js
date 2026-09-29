@@ -28,41 +28,30 @@ function checkAuthSession() {
   const userType = localStorage.getItem("fraud_user_type") || "staff";
   currentUserType = userType;
 
-  const sessionStr = localStorage.getItem("fraud_staff_session");
-  const custSessionStr = localStorage.getItem("fraud_customer_session");
+  // Customers must NOT see the internal staff fraud ticket portal
+  if (userType === "customer") {
+    window.location.href = "/customer";
+    return false;
+  }
 
-  if (!sessionStr && !custSessionStr) {
+  const sessionStr = localStorage.getItem("fraud_staff_session");
+  if (!sessionStr) {
     window.location.href = "/login";
     return false;
   }
 
-  let fullName = "Authenticated User";
-  let roleName = "Operations Officer";
-
-  if (userType === "customer" && custSessionStr) {
-    try {
-      currentCustomerUser = JSON.parse(custSessionStr);
-      fullName = currentCustomerUser.customer_name || currentCustomerUser.full_name || "Retail Customer";
-      const accCount = currentCustomerUser.accounts ? currentCustomerUser.accounts.length : 0;
-      roleName = `Retail Banking Customer (${accCount > 0 ? currentCustomerUser.accounts[0].account_number : 'Active'})`;
-      currentStaffUser = {
-        full_name: fullName,
-        username: currentCustomerUser.username,
-        role: "CUSTOMER",
-        department: "Retail NetBanking"
-      };
-    } catch(e) {
+  try {
+    currentStaffUser = JSON.parse(sessionStr);
+    if (!currentStaffUser || !currentStaffUser.full_name || currentStaffUser.role === "CUSTOMER") {
       window.location.href = "/login";
       return false;
     }
-  } else if (sessionStr) {
-    try {
-      currentStaffUser = JSON.parse(sessionStr);
-      if (!currentStaffUser || !currentStaffUser.full_name) {
-        window.location.href = "/login";
-        return false;
-      }
-      fullName = currentStaffUser.full_name || "Staff Officer";
+  } catch (e) {
+    window.location.href = "/login";
+    return false;
+  }
+
+  const fullName = currentStaffUser.full_name || "Staff Officer";
       roleName = currentStaffUser.role === "MANAGER" ? "Branch Manager (All Access)" : (currentStaffUser.department || (currentStaffUser.role === "CUSTOMER" ? "Retail Banking Customer" : "Fraud Investigator"));
     } catch (e) {
       window.location.href = "/login";
