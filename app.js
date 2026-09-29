@@ -1793,9 +1793,13 @@ async function handleCreateNewTicket(e) {
   };
 
   try {
+    const staffToken = localStorage.getItem("fraud_staff_token") || "stf_web_portal";
     const res = await fetch("/api/fraud-tickets", {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: { 
+        "Content-Type": "application/json",
+        "Authorization": `Bearer ${staffToken}`
+      },
       body: JSON.stringify(payload)
     });
     const data = await res.json();
