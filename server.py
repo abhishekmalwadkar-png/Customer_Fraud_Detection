@@ -122,6 +122,8 @@ def _get_ae_session_token() -> Optional[str]:
         logger.warning(f"[AutomationEdge] Authentication note: {e}")
     return None
 
+_recent_ae_triggers: dict[str, float] = {}
+
 def _call_ae_workflow_sync(workflow_name: str, parameters: dict) -> dict:
     """
     Synchronous worker to dispatch workflow execution request to AutomationEdge Server REST API.
@@ -135,18 +137,35 @@ def _call_ae_workflow_sync(workflow_name: str, parameters: dict) -> dict:
             "message": "AutomationEdge workflow trigger is disabled in configuration."
         }
 
-    token = _get_ae_session_token()
-
-    endpoint = f"{AE_SERVER_URL.rstrip('/')}/rest/execute"
-    
     # Format parameters for AutomationEdge (name/value list is standard on AE Cloud)
     param_list = []
+    account_val = ""
+    ticket_val = ""
     if isinstance(parameters, dict):
+        account_val = str(parameters.get("account_number") or parameters.get("account_no") or "")
+        ticket_val = str(parameters.get("ticket_number") or parameters.get("ticket_no") or "")
         for k, v in parameters.items():
             if v is not None:
                 param_list.append({"name": str(k), "value": str(v)})
     elif isinstance(parameters, list):
         param_list = parameters
+
+    # Loop prevention: Debounce repeat triggers for same ticket & account within 15s
+    dedup_key = f"{workflow_name}:{account_val}:{ticket_val}"
+    now = time.time()
+    last_fired = _recent_ae_triggers.get(dedup_key, 0)
+    if (now - last_fired) < 15.0:
+        logger.info(f"[AutomationEdge] Deduplicating rapid repeat trigger for '{dedup_key}' (last fired {now - last_fired:.1f}s ago).")
+        return {
+            "success": True,
+            "status": "DEDUPLICATED",
+            "workflow": workflow_name,
+            "message": f"Workflow '{workflow_name}' recently dispatched. Duplicate trigger suppressed."
+        }
+    _recent_ae_triggers[dedup_key] = now
+
+    token = _get_ae_session_token()
+    endpoint = f"{AE_SERVER_URL.rstrip('/')}/rest/execute"
 
     payload = {
         "orgCode": AE_ORG_CODE,
@@ -1613,11 +1632,20 @@ async def api_freeze_account(request: Request):
 
         conn.commit()
 
+        # Trigger AutomationEdge FreezeAccount Workflow (deduped automatically)
+        ae_dispatch = await trigger_automationedge_workflow(AE_WORKFLOW_FREEZE_ACCOUNT, {
+            "account_number": acc_num,
+            "ticket_number": ticket_num,
+            "action": "FREEZE_ACCOUNT",
+            "actor": actor
+        })
+
         return {
             "success": True, 
             "account_number": acc_num, 
             "ticket_number": ticket_num,
             "status": "FROZEN",
+            "ae_integration": ae_dispatch,
             "message": f"Bank account {acc_num} locked in database. (Any already resolved tickets remain in history as RESOLVED)."
         }
     except Exception as exc:
