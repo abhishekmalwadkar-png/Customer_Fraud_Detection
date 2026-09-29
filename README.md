@@ -8,53 +8,53 @@ An enterprise-grade, high-performance **Bank Fraud Case Management & Autonomous 
 
 ```mermaid
 flowchart TD
-    subgraph INTAKE["Fraud Intake & External Triggers"]
+    subgraph INTAKE["Fraud Intake and External Triggers"]
         A1["Customer Mobile App / Net Banking"]
         A2["Fake QR Standee / Phishing Alerts"]
         A3["Branch Helpdesk / Call Center"]
     end
 
-    subgraph AE_CLOUD["AutomationEdge (AE) T4 Cloud Server & Process Studio"]
-        B1["WF_RAISE_FRAUD / PR_FraudComplaints.psp<br/>(Automated Intake Pipeline)"]
-        B2["BlockBankAccount / WF_FreezeBankAccount.psw<br/>(Emergency Account & Card Lock RPA)"]
-        B3["ResolveFraudTicket / WF_ResolveTicket.psw<br/>(Dispute Resolution & Fund Recovery RPA)"]
-        B4["WF_UnfreezeAccount.psw<br/>(Customer Verification & Account Clearance RPA)"]
+    subgraph AE_CLOUD["AutomationEdge T4 Cloud Server and Process Studio"]
+        B1["WF_RAISE_FRAUD - Automated Intake Pipeline"]
+        B2["BlockBankAccount - Emergency Account and Card Lock RPA"]
+        B3["ResolveFraudTicket - Dispute Resolution and Fund Recovery RPA"]
+        B4["WF_UnfreezeAccount - Customer Verification and Account Clearance RPA"]
     end
 
-    subgraph BACKEND["Production ASGI Engine (FastAPI + Uvicorn + AsyncIO)"]
-        C1["Request Tracing (X-Request-ID) & Telemetry Middleware"]
-        C2["Pydantic v2 Schema Validation & Idempotency Guards"]
-        C3["Thread-Safe PostgreSQL Warm Connection Pool (DBUtils)"]
-        C4["Non-Blocking T4 Cloud RPA Dispatcher (asyncio.gather)"]
-        C5["Interactive OpenAPI / Swagger UI (/docs, /redoc)"]
+    subgraph BACKEND["Production ASGI Engine - FastAPI, Uvicorn, AsyncIO"]
+        C1["Request Tracing X-Request-ID and Telemetry Middleware"]
+        C2["Pydantic v2 Schema Validation and Idempotency Guards"]
+        C3["Thread-Safe PostgreSQL Connection Pool DBUtils"]
+        C4["Non-Blocking T4 Cloud RPA Dispatcher asyncio.gather"]
+        C5["Interactive OpenAPI Swagger UI at /docs and /redoc"]
     end
 
-    subgraph DB["PostgreSQL 16 Enterprise Database (bank_fraud_portal)"]
+    subgraph DB["PostgreSQL 16 Enterprise Database - bank_fraud_portal"]
         D1[("customers Master Directory")]
         D2[("customer_accounts State Ledger")]
-        D3[("fraud_tickets Full-Text Search (tsvector)")]
+        D3[("fraud_tickets Full-Text Search")]
         D4[("transactions Range Partitioned Ledger")]
         D5[("staff_users RBAC Master")]
         D6[("audit_logs Immutable Security Trail")]
     end
 
-    subgraph CLIENTS["Investigation & Operations Frontends"]
-        E1["Operations Portal UI (http://localhost:5050)"]
-        E2["Interactive Dossier Slide-Over & Forensics Center"]
+    subgraph CLIENTS["Investigation and Operations Frontends"]
+        E1["Operations Portal UI - Port 5050"]
+        E2["Interactive Dossier Slide-Over and Forensics Center"]
         E3["Multi-Select Bulk Operations Toolbar"]
-        E4["pgAdmin 4 Database Administration Client (Port 5432)"]
+        E4["pgAdmin 4 Database Administration Client"]
     end
 
     INTAKE -->|Trigger Intake| B1
-    B1 -->|HTTP POST /api/fraud-tickets| BACKEND
+    B1 -->|HTTP POST to /api/fraud-tickets| BACKEND
     BACKEND --> DB
     DB --> CLIENTS
-    CLIENTS -->|Single / Bulk Freeze Action| BACKEND
-    CLIENTS -->|Single / Bulk Resolve Action| BACKEND
-    BACKEND -->|Dispatch Workflow Execution (/rest/execute)| B2
-    BACKEND -->|Dispatch Workflow Execution (/rest/execute)| B3
-    B2 -->|Callback POST /api/freeze-account| BACKEND
-    B3 -->|Callback POST /api/resolve-ticket| BACKEND
+    CLIENTS -->|Single or Bulk Freeze Action| BACKEND
+    CLIENTS -->|Single or Bulk Resolve Action| BACKEND
+    BACKEND -->|Dispatch Workflow to T4 REST API| B2
+    BACKEND -->|Dispatch Workflow to T4 REST API| B3
+    B2 -->|Callback POST to /api/freeze-account| BACKEND
+    B3 -->|Callback POST to /api/resolve-ticket| BACKEND
 ```
 
 ---
