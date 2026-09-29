@@ -1345,18 +1345,9 @@ async def api_update_ticket(ticket_id: str, payload: FraudTicketUpdateSchema, re
 
         ticket_num, cust_id, acc_num, new_assigned, amt_inv, rec_amt = res
 
-        # If status was updated to FROZEN, freeze the account too and trigger AutomationEdge BlockBankAccount
+        # If status was updated to FROZEN, freeze the account too
         if status_val == "FROZEN":
             cursor.execute("UPDATE customer_accounts SET status = 'FROZEN' WHERE customer_id = %s OR account_number = %s;", (cust_id, acc_num))
-            await trigger_automationedge_workflow(AE_WORKFLOW_FREEZE_ACCOUNT, {
-                "ticket_number": ticket_num or "",
-                "account_number": acc_num or ""
-            })
-        elif status_val == "RESOLVED":
-            await trigger_automationedge_workflow(AE_WORKFLOW_RESOLVE_TICKET, {
-                "ticket_number": ticket_num or "",
-                "account_number": acc_num or ""
-            })
 
         client_ip = request.client.host if request.client else "127.0.0.1"
         actor = request.headers.get("X-User-Name") or DEFAULT_INVESTIGATOR
@@ -1470,12 +1461,6 @@ async def api_resolve_ticket(
 
         conn.commit()
 
-        # Trigger AutomationEdge ResolveFraudTicket workflow on T4
-        ae_dispatch = await trigger_automationedge_workflow(AE_WORKFLOW_RESOLVE_TICKET, {
-            "ticket_number": t_num or "",
-            "account_number": acc_num or ""
-        })
-
         return {
             "success": True,
             "ticket_id": t_id,
@@ -1486,8 +1471,7 @@ async def api_resolve_ticket(
             "amount_involved": float(amt_inv),
             "recovered_amount": float(rec_done),
             "action_taken": note,
-            "ae_integration": ae_dispatch,
-            "message": f"Fraud ticket {t_num} marked as RESOLVED and workflow '{AE_WORKFLOW_RESOLVE_TICKET}' triggered."
+            "message": f"Fraud ticket {t_num} marked as RESOLVED in database."
         }
     except Exception as exc:
         conn.rollback()
@@ -1765,8 +1749,12 @@ async def api_trigger_resolve_ticket_workflow(request: Request):
                     recovered_amount = amount_involved,
                     action_taken = %s,
                     updated_at = CURRENT_TIMESTAMP 
-                WHERE (ticket_number = %s OR ticket_number ILIKE %s);
+                WHERE (ticket_number = %s OR ticket_number ILIKE %s)
+                RETURNING account_number;
             """, (note, ticket_num, f"%{ticket_num}%"))
+            ret = cursor.fetchone()
+            if ret and ret[0] and not acc_num:
+                acc_num = ret[0]
             cursor.execute("""
                 INSERT INTO audit_logs (ticket_number, customer_name, actor, action, details, ip_address)
                 VALUES (%s, %s, %s, %s, %s, %s);

@@ -1465,12 +1465,13 @@ async function handleStatusUpdate(newStatus) {
   try {
     let res;
     if (newStatus === "RESOLVED") {
-      res = await fetch("/api/resolve-ticket", {
+      res = await fetch("/api/workflow/resolve-ticket", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           ticket_id: ticketId,
           ticket_number: ticketNum,
+          account_number: currentDossierTicket?.account_number || "",
           action_taken: `Dispute verified and resolved. Refund credited back to customer on ${new Date().toLocaleDateString()}`
         })
       });
