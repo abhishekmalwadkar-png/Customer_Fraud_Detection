@@ -428,11 +428,12 @@
             
             <!-- Bulk Staff Assignment -->
             <div style="display: inline-flex; align-items: center; gap: 4px; background: rgba(255,255,255,0.1); padding: 2px 6px; border-radius: 6px; border: 1px solid rgba(255,255,255,0.18);">
-              <select id="bulkStaffSelect" class="form-select" style="font-size: 11px; padding: 4px 8px; height: 28px; background: #091e42; color: #fff; border-color: rgba(255,255,255,0.3); border-radius: 4px; max-width: 160px;">
-                <option value="Shreya Deshmukh (Support Lead)">Shreya Deshmukh</option>
-                <option value="Rajesh Nair (Fraud Forensics)">Rajesh Nair</option>
-                <option value="Pooja Bansal (Customer Helpdesk Lead)">Pooja Bansal</option>
-                <option value="Vikramaditya Verma (Cyber Crime & Recovery)">Vikramaditya Verma</option>
+              <select id="bulkStaffSelect" class="form-select" style="font-size: 11px; padding: 4px 8px; height: 28px; background: #091e42; color: #fff; border-color: rgba(255,255,255,0.3); border-radius: 4px; max-width: 170px;">
+                <option value="Abhishek Malwadkar (High-Value Fraud Forensics)">Abhishek Malwadkar</option>
+                <option value="Vikram Malhotra (Fraud Risk Management (All Access))">Vikram Malhotra</option>
+                <option value="Pooja Bansal (Customer Helpdesk & Disputes)">Pooja Bansal</option>
+                <option value="SOC Fraud Operations Team (Cyber Fraud Operations)">SOC Operations Team</option>
+                <option value="Rahul Patil (Digital Banking Risk Cell)">Rahul Patil</option>
               </select>
               <button class="btn btn-sm btn-bulk-action" id="btnBulkAssignStaff" title="Assign selected complaints to chosen staff member" style="padding: 4px 8px; font-size: 11px;">
                 <i class="fa-solid fa-user-check"></i> Assign Staff
@@ -1023,15 +1024,16 @@
             </div>
             <div style="flex: 1;">
               <span class="dossier-label">Current Assignee:</span>
-              <strong id="dossierInvestigator" class="dossier-value highlight-cyan">Shreya Deshmukh (Support Lead)</strong>
+              <strong id="dossierInvestigator" class="dossier-value highlight-cyan">Abhishek Malwadkar (High-Value Fraud Forensics)</strong>
             </div>
           </div>
           <div style="margin-top: 12px; display: flex; gap: 8px;">
             <select id="selectDrawerStaff" class="form-select" style="flex: 1;">
-              <option value="Shreya Deshmukh (Support Lead)">Shreya Deshmukh (Support Lead)</option>
-              <option value="Rajesh Nair (Fraud Forensics)">Rajesh Nair (Fraud Forensics)</option>
-              <option value="Pooja Bansal (Customer Helpdesk Lead)">Pooja Bansal (Customer Helpdesk Lead)</option>
-              <option value="Vikramaditya Verma (Cyber Crime & Recovery)">Vikramaditya Verma (Cyber Crime & Recovery)</option>
+              <option value="Abhishek Malwadkar (High-Value Fraud Forensics)">Abhishek Malwadkar (High-Value Fraud Forensics)</option>
+              <option value="Vikram Malhotra (Fraud Risk Management (All Access))">Vikram Malhotra (Fraud Risk Management)</option>
+              <option value="Pooja Bansal (Customer Helpdesk & Disputes)">Pooja Bansal (Customer Helpdesk & Disputes)</option>
+              <option value="SOC Fraud Operations Team (Cyber Fraud Operations)">SOC Fraud Operations Team (Cyber Fraud)</option>
+              <option value="Rahul Patil (Digital Banking Risk Cell)">Rahul Patil (Digital Banking Risk Cell)</option>
             </select>
             <button class="btn btn-sm btn-primary" id="btnReassignStaff">
               <i class="fa-solid fa-user-check"></i> Reassign
@@ -1153,10 +1155,11 @@
           <div class="form-group">
             <label>Assign to Staff Officer</label>
             <select id="formStaffAssignee" class="form-select">
-              <option value="Shreya Deshmukh (Support Lead)" selected>Shreya Deshmukh (Support Lead)</option>
-              <option value="Rajesh Nair (Fraud Forensics)">Rajesh Nair (Fraud Forensics)</option>
-              <option value="Pooja Bansal (Customer Helpdesk Lead)">Pooja Bansal (Customer Helpdesk Lead)</option>
-              <option value="Vikramaditya Verma (Cyber Crime & Recovery)">Vikramaditya Verma (Cyber Crime & Recovery)</option>
+              <option value="Abhishek Malwadkar (High-Value Fraud Forensics)" selected>Abhishek Malwadkar (High-Value Fraud Forensics)</option>
+              <option value="Vikram Malhotra (Fraud Risk Management (All Access))">Vikram Malhotra (Fraud Risk Management)</option>
+              <option value="Pooja Bansal (Customer Helpdesk & Disputes)">Pooja Bansal (Customer Helpdesk & Disputes)</option>
+              <option value="SOC Fraud Operations Team (Cyber Fraud Operations)">SOC Fraud Operations Team (Cyber Fraud)</option>
+              <option value="Rahul Patil (Digital Banking Risk Cell)">Rahul Patil (Digital Banking Risk Cell)</option>
             </select>
           </div>
           <div class="form-group full-span">
@@ -1182,6 +1185,6 @@
   <!-- Toast Notification Container -->
   <div class="toast-container" id="toastContainer"></div>
 
-  <script src="app.js?v=14.0"></script>
+  <script src="app.js?v=16.0"></script>
 </body>
 </html>

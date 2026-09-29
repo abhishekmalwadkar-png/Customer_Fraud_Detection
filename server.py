@@ -386,13 +386,13 @@ class FraudTicketCreateSchema(BaseModel):
 
 class FraudTicketUpdateSchema(BaseModel):
     status: Optional[str] = Field(None, description="New ticket status (UNDER_INVESTIGATION, FROZEN, RESOLVED, CLOSED, REJECTED, ESCALATED)", examples=["RESOLVED"])
-    assigned_investigator: Optional[str] = Field(None, description="Staff investigator assigned to handle the complaint", examples=["Shreya Deshmukh (Support Lead)"])
+    assigned_investigator: Optional[str] = Field(None, description="Staff investigator assigned to handle the complaint", examples=["Abhishek Malwadkar (High-Value Fraud Forensics)"])
     action_taken: Optional[str] = Field("", description="Resolution note or investigation comments", examples=["Card cancelled and funds blocked."])
 
 class BulkTicketUpdateSchema(BaseModel):
     ticket_ids: List[Union[int, str]] = Field(..., description="List of ticket IDs or ticket numbers to update", examples=[[101, 102, 103]])
     status: Optional[str] = Field(None, description="New status to set across selected tickets", examples=["RESOLVED"])
-    assigned_investigator: Optional[str] = Field(None, description="Staff member to assign across selected tickets", examples=["Rajesh Nair (Fraud Forensics)"])
+    assigned_investigator: Optional[str] = Field(None, description="Staff member to assign across selected tickets", examples=["Vikram Malhotra (Fraud Risk Management (All Access))"])
     action_taken: Optional[str] = Field("", description="Optional action note for the audit log")
 
 class FreezeAccountSchema(BaseModel):
@@ -519,6 +519,35 @@ def api_get_staff_profiles():
                 "department": r[5]
             })
         return profiles
+    finally:
+        cursor.close()
+        conn.close()
+
+@app.get("/api/staff-users", tags=["Staff Authentication"])
+def api_get_staff_users():
+    """Returns list of active staff members from PostgreSQL staff_users table for assignment dropdowns."""
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    try:
+        cursor.execute("""
+            SELECT user_id, username, full_name, role, email, department
+            FROM staff_users
+            WHERE is_active = TRUE
+            ORDER BY user_id;
+        """)
+        rows = cursor.fetchall()
+        return [
+            {
+                "user_id": r[0],
+                "username": r[1],
+                "full_name": r[2],
+                "role": r[3],
+                "email": r[4],
+                "department": r[5],
+                "display_name": f"{r[2]} ({r[5]})" if r[5] else r[2]
+            }
+            for r in rows
+        ]
     finally:
         cursor.close()
         conn.close()
@@ -1222,19 +1251,25 @@ def _sync_bulk_dummy_intake(target_count: int, client_ip: str) -> List[Dict[str,
         "EasyLoan Mobile App Hub"
     ]
 
-    staff_list = [
-        "Shreya Deshmukh (Support Lead)",
-        "Rajesh Nair (Fraud Forensics)",
-        "Pooja Mehta (Compliance Officer)",
-        "Amitabh Sen (Senior Analyst)"
-    ]
-
     created_tickets = []
     conn = get_db_connection()
     conn.autocommit = True
     cursor = conn.cursor()
 
     try:
+        # Load live active staff members from staff_users table
+        cursor.execute("SELECT full_name, department FROM staff_users WHERE is_active = TRUE ORDER BY user_id;")
+        staff_rows = cursor.fetchall()
+        if staff_rows:
+            staff_list = [f"{r[0]} ({r[1]})" if r[1] else r[0] for r in staff_rows]
+        else:
+            staff_list = [
+                "Abhishek Malwadkar (High-Value Fraud Forensics)",
+                "Vikram Malhotra (Fraud Risk Management (All Access))",
+                "Pooja Bansal (Customer Helpdesk & Disputes)",
+                "SOC Fraud Operations Team (Cyber Fraud Operations)",
+                "Rahul Patil (Digital Banking Risk Cell)"
+            ]
         for i in range(1, target_count + 1):
             fname = random.choice(first_names)
             lname = random.choice(last_names)

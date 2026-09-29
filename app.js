@@ -72,6 +72,81 @@ function handleStaffLogout() {
   }
 }
 
+let allStaffMembers = [];
+
+async function loadStaffMembers() {
+  try {
+    const res = await fetch("/api/staff-users");
+    if (!res.ok) return;
+    const data = await res.json();
+    if (Array.isArray(data) && data.length > 0) {
+      allStaffMembers = data;
+      populateStaffDropdowns();
+    }
+  } catch (err) {
+    console.error("Could not load staff members from DB:", err);
+  }
+}
+
+function populateStaffDropdowns() {
+  if (!allStaffMembers || allStaffMembers.length === 0) return;
+
+  const fullOptionsHtml = allStaffMembers.map(s => {
+    const val = s.department ? `${s.full_name} (${s.department})` : s.full_name;
+    return `<option value="${escapeHtml(val)}">${escapeHtml(val)}</option>`;
+  }).join("");
+
+  const shortOptionsHtml = allStaffMembers.map(s => {
+    const val = s.department ? `${s.full_name} (${s.department})` : s.full_name;
+    return `<option value="${escapeHtml(val)}">${escapeHtml(s.full_name)}</option>`;
+  }).join("");
+
+  // 1. New Ticket Modal Form dropdown
+  const formStaffSelect = document.getElementById("formStaffAssignee");
+  if (formStaffSelect) {
+    const prevVal = formStaffSelect.value;
+    formStaffSelect.innerHTML = fullOptionsHtml;
+    if (prevVal) {
+      for (let opt of formStaffSelect.options) {
+        if (opt.value === prevVal || opt.value.includes(prevVal.split(" (")[0])) {
+          formStaffSelect.value = opt.value;
+          break;
+        }
+      }
+    }
+  }
+
+  // 2. Incident Dossier / Drawer reassign dropdown
+  const drawerStaffSelect = document.getElementById("selectDrawerStaff");
+  if (drawerStaffSelect) {
+    const prevVal = drawerStaffSelect.value;
+    drawerStaffSelect.innerHTML = fullOptionsHtml;
+    if (prevVal) {
+      for (let opt of drawerStaffSelect.options) {
+        if (opt.value === prevVal || opt.value.includes(prevVal.split(" (")[0])) {
+          drawerStaffSelect.value = opt.value;
+          break;
+        }
+      }
+    }
+  }
+
+  // 3. Bulk Toolbar Staff Assign dropdown
+  const bulkStaffSelect = document.getElementById("bulkStaffSelect");
+  if (bulkStaffSelect) {
+    const prevVal = bulkStaffSelect.value;
+    bulkStaffSelect.innerHTML = shortOptionsHtml;
+    if (prevVal) {
+      for (let opt of bulkStaffSelect.options) {
+        if (opt.value === prevVal || opt.value.includes(prevVal.split(" (")[0])) {
+          bulkStaffSelect.value = opt.value;
+          break;
+        }
+      }
+    }
+  }
+}
+
 document.addEventListener("DOMContentLoaded", () => {
   if (!checkAuthSession()) return;
 
@@ -80,6 +155,7 @@ document.addEventListener("DOMContentLoaded", () => {
   initEventListeners();
   checkSystemHealth();
   loadSavedNotifications();
+  loadStaffMembers();
   loadAllData();
 
   // 1.5-second ultra-fast real-time auto-sync with AutomationEdge Process Studio & incoming API calls
@@ -380,7 +456,7 @@ function initEventListeners() {
   document.getElementById("btnBulkResolve")?.addEventListener("click", () => executeBulkAction("RESOLVED", "Bulk resolved and closed"));
   document.getElementById("btnBulkEscalate")?.addEventListener("click", () => executeBulkAction("ESCALATED", "Bulk escalated to Senior Team"));
   document.getElementById("btnBulkAssignStaff")?.addEventListener("click", () => {
-    const staff = document.getElementById("bulkStaffSelect")?.value || "Shreya Deshmukh (Support Lead)";
+    const staff = document.getElementById("bulkStaffSelect")?.value || (allStaffMembers.length > 0 ? (allStaffMembers[0].department ? `${allStaffMembers[0].full_name} (${allStaffMembers[0].department})` : allStaffMembers[0].full_name) : "Abhishek Malwadkar (High-Value Fraud Forensics)");
     executeBulkStaffAssign(staff);
   });
   document.getElementById("btnBulkExport")?.addEventListener("click", exportSelectedTicketsCSV);
@@ -1397,11 +1473,22 @@ window.openIncidentDossier = async function(ticketId) {
     document.getElementById("dossierAction").textContent = ticket.action_taken || "Incident registered in database. Active forensics docket.";
 
     // Assigned Staff
-    const currentStaff = ticket.assigned_investigator || "Shreya Deshmukh (Support Lead)";
+    const currentStaff = ticket.assigned_investigator || (allStaffMembers.length > 0 ? (allStaffMembers[0].department ? `${allStaffMembers[0].full_name} (${allStaffMembers[0].department})` : allStaffMembers[0].full_name) : "Abhishek Malwadkar (High-Value Fraud Forensics)");
     const dossierStaffEl = document.getElementById("dossierInvestigator");
     if (dossierStaffEl) dossierStaffEl.textContent = currentStaff;
     const selectStaffEl = document.getElementById("selectDrawerStaff");
-    if (selectStaffEl) selectStaffEl.value = currentStaff;
+    if (selectStaffEl) {
+      selectStaffEl.value = currentStaff;
+      if (!selectStaffEl.value && currentStaff) {
+        const staffNameOnly = currentStaff.split(" (")[0].trim().toLowerCase();
+        for (let opt of selectStaffEl.options) {
+          if (opt.value.toLowerCase().includes(staffNameOnly)) {
+            selectStaffEl.value = opt.value;
+            break;
+          }
+        }
+      }
+    }
 
     // Linked Transactions
     const txnListEl = document.getElementById("drawerTxnList");
@@ -1686,7 +1773,9 @@ async function handleCreateNewTicket(e) {
   e.preventDefault();
   const amt = parseFloat(document.getElementById("formAmount").value) || 0;
   const computedSeverity = getPriorityForAmount(amt).level;
-  const staffAssignee = document.getElementById("formStaffAssignee") ? document.getElementById("formStaffAssignee").value : "Shreya Deshmukh (Support Lead)";
+  const staffAssignee = (document.getElementById("formStaffAssignee") && document.getElementById("formStaffAssignee").value)
+    ? document.getElementById("formStaffAssignee").value
+    : (allStaffMembers.length > 0 ? (allStaffMembers[0].department ? `${allStaffMembers[0].full_name} (${allStaffMembers[0].department})` : allStaffMembers[0].full_name) : "Abhishek Malwadkar (High-Value Fraud Forensics)");
 
   const payload = {
     full_name: document.getElementById("formCustName").value,
