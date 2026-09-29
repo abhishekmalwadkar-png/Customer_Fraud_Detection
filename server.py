@@ -1645,20 +1645,11 @@ async def api_freeze_account(request: Request):
 
         conn.commit()
 
-        # Trigger AutomationEdge FreezeAccount Workflow (deduped automatically)
-        ae_dispatch = await trigger_automationedge_workflow(AE_WORKFLOW_FREEZE_ACCOUNT, {
-            "account_number": acc_num,
-            "ticket_number": ticket_num,
-            "action": "FREEZE_ACCOUNT",
-            "actor": actor
-        })
-
         return {
             "success": True, 
             "account_number": acc_num, 
             "ticket_number": ticket_num,
             "status": "FROZEN",
-            "ae_integration": ae_dispatch,
             "message": f"Bank account {acc_num} locked in database. (Any already resolved tickets remain in history as RESOLVED)."
         }
     except Exception as exc:
