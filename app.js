@@ -38,17 +38,29 @@ function checkAuthSession() {
     return false;
   }
 
-  // Update Header User Profile UI
+  // Update Header & Home Hero User Profile UI
   const nameEl = document.getElementById("headerUserName");
   const roleEl = document.getElementById("headerUserRole");
   const avatarEl = document.getElementById("headerUserAvatar");
-  if (nameEl) nameEl.textContent = currentStaffUser.full_name;
-  if (roleEl) roleEl.textContent = currentStaffUser.role === "MANAGER" ? "Branch Manager (All Access)" : (currentStaffUser.department || "Fraud Investigator");
+  const heroWelcomeEl = document.getElementById("homeHeroWelcome");
+  const heroSubtitleEl = document.getElementById("homeHeroSubtitle");
+  const heroRoleEl = document.getElementById("homeHeroRole");
+
+  const fullName = currentStaffUser.full_name || "Staff Officer";
+  const roleName = currentStaffUser.role === "MANAGER" ? "Branch Manager (All Access)" : (currentStaffUser.department || "Fraud Investigator");
+
+  if (nameEl) nameEl.textContent = fullName;
+  if (roleEl) roleEl.textContent = roleName;
   if (avatarEl) {
-    const parts = (currentStaffUser.full_name || "Staff").split(" ");
+    const parts = fullName.split(" ");
     const initials = parts.length > 1 ? (parts[0][0] + parts[1][0]).toUpperCase() : parts[0].slice(0, 2).toUpperCase();
     avatarEl.textContent = initials;
   }
+
+  if (heroWelcomeEl) heroWelcomeEl.textContent = `Welcome, ${fullName}`;
+  if (heroSubtitleEl) heroSubtitleEl.textContent = `${roleName} • Apex Trust Bank Fraud Prevention & Operations Hub`;
+  if (heroRoleEl) heroRoleEl.textContent = roleName;
+
   return true;
 }
 
