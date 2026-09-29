@@ -1178,6 +1178,17 @@ function updateBulkToolbar() {
           btnBulkFreeze.style.display = "inline-flex";
         }
       }
+
+      // Check if any selected tickets are not yet resolved
+      const unresolvedCount = selectedTickets.filter(t => t.status !== 'RESOLVED' && t.status !== 'CLOSED').length;
+      const btnBulkResolve = document.getElementById("btnBulkResolve");
+      if (btnBulkResolve) {
+        if (unresolvedCount === 0) {
+          btnBulkResolve.style.display = "none";
+        } else {
+          btnBulkResolve.style.display = "inline-flex";
+        }
+      }
     } else {
       bar.style.display = "none";
     }
@@ -1375,6 +1386,13 @@ window.openIncidentDossier = async function(ticketId) {
     if (btnFreeze) btnFreeze.style.display = isBlocked ? "none" : "block";
     if (alertBlocked) alertBlocked.style.display = isBlocked ? "block" : "none";
 
+    // Check if ticket is already resolved
+    const isResolved = (ticket.status === 'RESOLVED' || ticket.status === 'CLOSED');
+    const btnResolve = document.getElementById("btnDrawerResolve");
+    const alertResolved = document.getElementById("drawerResolvedAlert");
+    if (btnResolve) btnResolve.style.display = isResolved ? "none" : "block";
+    if (alertResolved) alertResolved.style.display = isResolved ? "block" : "none";
+
     document.getElementById("drawerOverlay").classList.add("open");
   } catch (err) {
     showToast("Error opening ticket dossier: " + err.message, "error");
@@ -1469,7 +1487,10 @@ async function handleStatusUpdate(newStatus) {
     const data = await res.json();
     if (data.success) {
       const friendlyStatus = newStatus === 'RESOLVED' ? 'Solved / Refunded' : (newStatus === 'FROZEN' ? 'Account Blocked' : (newStatus === 'ESCALATED' ? 'Escalated' : 'In Progress'));
-      const aeWorkflowNote = newStatus === 'RESOLVED' ? " (AutomationEdge 'ResolveTicket' workflow dispatched)" : "";
+      const reqId = data.ae_integration?.automation_request_id || data.ae_integration?.response?.automationRequestId;
+      const aeWorkflowNote = (newStatus === 'RESOLVED' && reqId) 
+        ? ` (T4 AutomationEdge 'ResolveFraudTicket' triggered - Req #${reqId})` 
+        : (newStatus === 'RESOLVED' ? " (T4 AutomationEdge 'ResolveFraudTicket' dispatched)" : "");
       showToast(`Complaint ${currentDossierTicket.ticket_number} updated to "${friendlyStatus}"${aeWorkflowNote}`, "success");
       loadAllData();
     }

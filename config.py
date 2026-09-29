@@ -68,6 +68,6 @@ AE_USERNAME = os.getenv("AE_USERNAME", "abhishek.malwatkar@valuedx.com")
 AE_PASSWORD = os.getenv("AE_PASSWORD", "Abhi@2002")
 AE_WORKFLOW_RAISE_FRAUD = os.getenv("AE_WORKFLOW_RAISE_FRAUD", "WF_RAISE_FRAUD")
 AE_WORKFLOW_FREEZE_ACCOUNT = os.getenv("AE_WORKFLOW_FREEZE_ACCOUNT", "BlockBankAccount")
-AE_WORKFLOW_RESOLVE_TICKET = os.getenv("AE_WORKFLOW_RESOLVE_TICKET", "WF_ResolveTicket")
+AE_WORKFLOW_RESOLVE_TICKET = os.getenv("AE_WORKFLOW_RESOLVE_TICKET", "ResolveFraudTicket")
 AE_TRIGGER_ENABLED = os.getenv("AE_TRIGGER_ENABLED", "true").lower() in ("true", "1", "yes")
 
