@@ -1008,21 +1008,21 @@ function applyFilters() {
   filteredTickets = activeTicketsPool.filter(t => {
     // Search
     const searchMatch = !searchTerm ||
-      t.ticket_number.toLowerCase().includes(searchTerm) ||
-      t.full_name.toLowerCase().includes(searchTerm) ||
-      t.email.toLowerCase().includes(searchTerm) ||
-      t.account_number.toLowerCase().includes(searchTerm) ||
-      t.customer_code.toLowerCase().includes(searchTerm) ||
-      t.incident_type.toLowerCase().includes(searchTerm);
+      (t.ticket_number || "").toLowerCase().includes(searchTerm) ||
+      (t.full_name || t.customer_name || "").toLowerCase().includes(searchTerm) ||
+      (t.email || "").toLowerCase().includes(searchTerm) ||
+      (t.account_number || "").toLowerCase().includes(searchTerm) ||
+      (t.customer_code || "").toLowerCase().includes(searchTerm) ||
+      (t.incident_type || "").toLowerCase().includes(searchTerm);
 
     // Severity
-    const sevMatch = severityFilter === "ALL" || t.severity === severityFilter;
+    const sevMatch = severityFilter === "ALL" || (t.severity || "").toUpperCase() === severityFilter.toUpperCase();
 
     // Status
-    const statusMatch = statusFilter === "ALL" || t.status === statusFilter;
+    const statusMatch = statusFilter === "ALL" || (t.status || "").toUpperCase() === statusFilter.toUpperCase();
 
     // Type
-    const typeMatch = typeFilter === "ALL" || t.incident_type.toLowerCase().includes(typeFilter.toLowerCase());
+    const typeMatch = typeFilter === "ALL" || (t.incident_type || "").toLowerCase().includes(typeFilter.toLowerCase());
 
     return searchMatch && sevMatch && statusMatch && typeMatch;
   });
@@ -1050,14 +1050,14 @@ function applySolvedFilters() {
 
   filteredSolvedTickets = solvedTickets.filter(t => {
     const searchMatch = !searchTerm ||
-      t.ticket_number.toLowerCase().includes(searchTerm) ||
-      t.full_name.toLowerCase().includes(searchTerm) ||
-      t.email.toLowerCase().includes(searchTerm) ||
-      t.account_number.toLowerCase().includes(searchTerm) ||
-      t.customer_code.toLowerCase().includes(searchTerm) ||
-      t.incident_type.toLowerCase().includes(searchTerm);
+      (t.ticket_number || "").toLowerCase().includes(searchTerm) ||
+      (t.full_name || t.customer_name || "").toLowerCase().includes(searchTerm) ||
+      (t.email || "").toLowerCase().includes(searchTerm) ||
+      (t.account_number || "").toLowerCase().includes(searchTerm) ||
+      (t.customer_code || "").toLowerCase().includes(searchTerm) ||
+      (t.incident_type || "").toLowerCase().includes(searchTerm);
 
-    const typeMatch = typeFilter === "ALL" || t.incident_type.toLowerCase().includes(typeFilter.toLowerCase());
+    const typeMatch = typeFilter === "ALL" || (t.incident_type || "").toLowerCase().includes(typeFilter.toLowerCase());
 
     return searchMatch && typeMatch;
   });
