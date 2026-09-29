@@ -19,21 +19,56 @@ let recentTxData = [];
 let selectedTicketIds = new Set();
 let currentDossierTicket = null;
 
-// Staff Authentication Session
+// User Authentication Session (Employee & Customer)
 let currentStaffUser = null;
+let currentCustomerUser = null;
+let currentUserType = "staff";
+
 function checkAuthSession() {
+  const userType = localStorage.getItem("fraud_user_type") || "staff";
+  currentUserType = userType;
+
   const sessionStr = localStorage.getItem("fraud_staff_session");
-  if (!sessionStr) {
+  const custSessionStr = localStorage.getItem("fraud_customer_session");
+
+  if (!sessionStr && !custSessionStr) {
     window.location.href = "/login";
     return false;
   }
-  try {
-    currentStaffUser = JSON.parse(sessionStr);
-    if (!currentStaffUser || !currentStaffUser.full_name) {
+
+  let fullName = "Authenticated User";
+  let roleName = "Operations Officer";
+
+  if (userType === "customer" && custSessionStr) {
+    try {
+      currentCustomerUser = JSON.parse(custSessionStr);
+      fullName = currentCustomerUser.customer_name || currentCustomerUser.full_name || "Retail Customer";
+      const accCount = currentCustomerUser.accounts ? currentCustomerUser.accounts.length : 0;
+      roleName = `Retail Banking Customer (${accCount > 0 ? currentCustomerUser.accounts[0].account_number : 'Active'})`;
+      currentStaffUser = {
+        full_name: fullName,
+        username: currentCustomerUser.username,
+        role: "CUSTOMER",
+        department: "Retail NetBanking"
+      };
+    } catch(e) {
       window.location.href = "/login";
       return false;
     }
-  } catch (e) {
+  } else if (sessionStr) {
+    try {
+      currentStaffUser = JSON.parse(sessionStr);
+      if (!currentStaffUser || !currentStaffUser.full_name) {
+        window.location.href = "/login";
+        return false;
+      }
+      fullName = currentStaffUser.full_name || "Staff Officer";
+      roleName = currentStaffUser.role === "MANAGER" ? "Branch Manager (All Access)" : (currentStaffUser.department || (currentStaffUser.role === "CUSTOMER" ? "Retail Banking Customer" : "Fraud Investigator"));
+    } catch (e) {
+      window.location.href = "/login";
+      return false;
+    }
+  } else {
     window.location.href = "/login";
     return false;
   }
@@ -46,9 +81,6 @@ function checkAuthSession() {
   const heroSubtitleEl = document.getElementById("homeHeroSubtitle");
   const heroRoleEl = document.getElementById("homeHeroRole");
 
-  const fullName = currentStaffUser.full_name || "Staff Officer";
-  const roleName = currentStaffUser.role === "MANAGER" ? "Branch Manager (All Access)" : (currentStaffUser.department || "Fraud Investigator");
-
   if (nameEl) nameEl.textContent = fullName;
   if (roleEl) roleEl.textContent = roleName;
   if (avatarEl) {
@@ -58,7 +90,7 @@ function checkAuthSession() {
   }
 
   if (heroWelcomeEl) heroWelcomeEl.textContent = `Welcome, ${fullName}`;
-  if (heroSubtitleEl) heroSubtitleEl.textContent = `${roleName} • Dummy Bank Portal Fraud Prevention & Operations Hub`;
+  if (heroSubtitleEl) heroSubtitleEl.textContent = `${roleName} • Dummy Bank Portal Operations Hub`;
   if (heroRoleEl) heroRoleEl.textContent = roleName;
 
   return true;
@@ -68,6 +100,9 @@ function handleStaffLogout() {
   if (confirm("Sign out from the Dummy Bank Portal?")) {
     localStorage.removeItem("fraud_staff_session");
     localStorage.removeItem("fraud_staff_token");
+    localStorage.removeItem("fraud_customer_session");
+    localStorage.removeItem("fraud_customer_token");
+    localStorage.removeItem("fraud_user_type");
     window.location.href = "/login";
   }
 }
