@@ -126,18 +126,18 @@ _recent_ae_triggers: dict[str, float] = {}
 
 def _call_ae_workflow_sync(workflow_name: str, parameters: dict) -> dict:
     """
-    Synchronous worker to dispatch workflow execution request to AutomationEdge Server REST API.
-    Handles authenticated sessionToken, orgCode, payload formatting, and graceful logging.
+    Direct Live Integration Worker to dispatch workflow execution request to AutomationEdge T4 Server REST API.
+    Handles authenticated sessionToken, orgCode, parameter list formatting, and strictly communicates with T4.
     """
     if not AE_TRIGGER_ENABLED:
         return {
-            "success": True,
+            "success": False,
             "status": "DISABLED",
             "workflow": workflow_name,
             "message": "AutomationEdge workflow trigger is disabled in configuration."
         }
 
-    # Format parameters for AutomationEdge (name/value list is standard on AE Cloud)
+    # Format parameters for AutomationEdge
     param_list = []
     account_val = ""
     ticket_val = ""
@@ -150,17 +150,17 @@ def _call_ae_workflow_sync(workflow_name: str, parameters: dict) -> dict:
     elif isinstance(parameters, list):
         param_list = parameters
 
-    # Loop prevention: Debounce repeat triggers for same ticket & account within 15s
+    # Loop prevention: Debounce repeat triggers for same ticket & account within 10s
     dedup_key = f"{workflow_name}:{account_val}:{ticket_val}"
     now = time.time()
     last_fired = _recent_ae_triggers.get(dedup_key, 0)
-    if (now - last_fired) < 15.0:
+    if (now - last_fired) < 10.0:
         logger.info(f"[AutomationEdge] Deduplicating rapid repeat trigger for '{dedup_key}' (last fired {now - last_fired:.1f}s ago).")
         return {
             "success": True,
             "status": "DEDUPLICATED",
             "workflow": workflow_name,
-            "message": f"Workflow '{workflow_name}' recently dispatched. Duplicate trigger suppressed."
+            "message": f"Workflow '{workflow_name}' was recently dispatched to T4 server. Duplicate trigger suppressed."
         }
     _recent_ae_triggers[dedup_key] = now
 
@@ -186,8 +186,8 @@ def _call_ae_workflow_sync(workflow_name: str, parameters: dict) -> dict:
         headers["Authorization"] = f"Basic {base64.b64encode(auth_str.encode('utf-8')).decode('utf-8')}"
 
     try:
-        logger.info(f"[AutomationEdge] Dispatching workflow '{workflow_name}' to T4 AE Server ({endpoint}) with params: {param_list}...")
-        resp = requests.post(endpoint, json=payload, headers=headers, timeout=5.0)
+        logger.info(f"[AutomationEdge] Dispatching live workflow '{workflow_name}' to T4 AE Server ({endpoint}) with params: {param_list}...")
+        resp = requests.post(endpoint, json=payload, headers=headers, timeout=10.0)
         
         if resp.status_code in (200, 201, 202):
             try:
@@ -202,29 +202,35 @@ def _call_ae_workflow_sync(workflow_name: str, parameters: dict) -> dict:
                 "ae_server_url": AE_SERVER_URL,
                 "org_code": AE_ORG_CODE,
                 "automation_request_id": resp_json.get("automationRequestId"),
+                "source_id": resp_json.get("sourceId"),
                 "response": resp_json,
-                "message": f"Workflow '{workflow_name}' successfully triggered on AutomationEdge T4 Server (Request ID: {resp_json.get('automationRequestId')})."
+                "message": f"Workflow '{workflow_name}' successfully queued on AutomationEdge T4 Server (Automation Request ID: {resp_json.get('automationRequestId')})."
             }
         else:
-            logger.info(f"[AutomationEdge] Published workflow '{workflow_name}' dispatched to AE server (HTTP {resp.status_code}).")
+            try:
+                err_json = resp.json()
+            except Exception:
+                err_json = {"raw": resp.text}
+            logger.error(f"[AutomationEdge] T4 Server returned error (HTTP {resp.status_code}): {err_json}")
             return {
-                "success": True,
-                "status": "PUBLISHED_ACTIVE_ON_AE",
+                "success": False,
+                "status": "FAILED_ON_AE_SERVER",
                 "workflow": workflow_name,
                 "ae_server_url": AE_SERVER_URL,
                 "org_code": AE_ORG_CODE,
                 "http_status": resp.status_code,
-                "message": f"AutomationEdge workflow '{workflow_name}' is published and active for Org '{AE_ORG_CODE}'."
+                "response": err_json,
+                "message": f"AutomationEdge T4 Server returned HTTP {resp.status_code}: {err_json.get('message', resp.text)}"
             }
     except Exception as err:
-        logger.info(f"[AutomationEdge] AE workflow '{workflow_name}' dispatched locally: {err}.")
+        logger.error(f"[AutomationEdge] Network error connecting to T4 AE server: {err}.")
         return {
-            "success": True,
-            "status": "PUBLISHED_LOCAL_READY",
+            "success": False,
+            "status": "CONNECTION_ERROR",
             "workflow": workflow_name,
             "ae_server_url": AE_SERVER_URL,
             "org_code": AE_ORG_CODE,
-            "message": f"AutomationEdge workflow '{workflow_name}' published and active on AE server.",
+            "message": f"Failed to connect to AutomationEdge T4 Server: {str(err)}",
             "details": str(err)
         }
 
