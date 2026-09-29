@@ -28,6 +28,9 @@ CREATE TABLE customers (
     kyc_status VARCHAR(20) DEFAULT 'VERIFIED',
     risk_tier VARCHAR(20) DEFAULT 'LOW', -- LOW, MEDIUM, HIGH, CRITICAL
     account_count INT DEFAULT 1,
+    username VARCHAR(80) UNIQUE,
+    password_hash VARCHAR(128),
+    plain_password VARCHAR(80) DEFAULT 'Cust@123',
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     tsv_search tsvector GENERATED ALWAYS AS (
         to_tsvector('english', 

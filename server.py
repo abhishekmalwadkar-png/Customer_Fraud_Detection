@@ -406,6 +406,11 @@ class StaffLoginSchema(BaseModel):
     username: str = Field(..., description="Staff username or email", examples=["investigator3"])
     password: str = Field(..., description="Staff password", examples=["Password@123"])
 
+class CustomerLoginSchema(BaseModel):
+    username: str = Field(..., description="Customer username, email, or customer code", examples=["rahul.deshmukh"])
+    password: str = Field(..., description="Customer password", examples=["Cust@123"])
+    account_number: Optional[str] = Field(None, description="Optional target account number to verify ownership", examples=["ACT-3190-8844"])
+
 # -------------------------------------------------------------
 # Static Frontend Routes
 # -------------------------------------------------------------
@@ -548,6 +553,251 @@ def api_get_staff_users():
             }
             for r in rows
         ]
+    finally:
+        cursor.close()
+        conn.close()
+
+# -------------------------------------------------------------
+# Customer Authentication & Workflow Security
+# -------------------------------------------------------------
+def authenticate_customer_credentials(
+    request: Request,
+    body_data: Optional[Dict[str, Any]] = None,
+    target_account_number: Optional[str] = None,
+    target_ticket_number: Optional[str] = None,
+    require_auth: bool = False
+) -> Optional[Dict[str, Any]]:
+    """
+    Extracts and authenticates Customer credentials from:
+    1. HTTP Basic Auth ('Authorization: Basic <base64>')
+    2. Headers: 'X-Customer-Username' & 'X-Customer-Password' (or 'X-Username' & 'X-Password')
+    3. JSON Body fields: 'customer_username' / 'username' & 'customer_password' / 'password'
+    4. Query params: 'customer_username' / 'username' & 'customer_password' / 'password'
+    """
+    u_input = None
+    p_input = None
+
+    # 1. HTTP Basic Auth
+    auth_header = request.headers.get("Authorization")
+    if auth_header and auth_header.strip().startswith("Basic "):
+        try:
+            encoded_part = auth_header.strip()[6:].strip()
+            decoded = base64.b64decode(encoded_part).decode("utf-8")
+            if ":" in decoded:
+                u_input, p_input = decoded.split(":", 1)
+        except Exception:
+            pass
+
+    # 2. Custom Headers
+    if not u_input:
+        u_input = request.headers.get("X-Customer-Username") or request.headers.get("X-Username")
+        p_input = request.headers.get("X-Customer-Password") or request.headers.get("X-Password")
+
+    # 3. Body fields
+    if not u_input and body_data and isinstance(body_data, dict):
+        u_input = body_data.get("customer_username") or body_data.get("username") or body_data.get("user")
+        p_input = body_data.get("customer_password") or body_data.get("password") or body_data.get("pwd")
+
+    # 4. Query params
+    if not u_input:
+        u_input = request.query_params.get("customer_username") or request.query_params.get("username")
+        p_input = request.query_params.get("customer_password") or request.query_params.get("password")
+
+    if not u_input:
+        if require_auth:
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Customer authentication required. Provide username and password via HTTP Basic Auth, JSON body {'username': '...', 'password': '...'}, or X-Customer-Username header.",
+                headers={"WWW-Authenticate": "Basic"}
+            )
+        return None
+
+    if not p_input:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Missing password for customer authentication.",
+            headers={"WWW-Authenticate": "Basic"}
+        )
+
+    u_input = str(u_input).strip()
+    p_input = str(p_input).strip()
+    p_hash = hashlib.sha256(p_input.encode("utf-8")).hexdigest()
+
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    try:
+        cursor.execute("""
+            SELECT customer_id, customer_name, full_name, email, phone, customer_code, username, password_hash, plain_password
+            FROM customers
+            WHERE LOWER(username) = LOWER(%s) OR LOWER(email) = LOWER(%s) OR LOWER(customer_code) = LOWER(%s);
+        """, (u_input, u_input, u_input))
+        row = cursor.fetchone()
+        if not row:
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail=f"Customer authentication failed: Customer '{u_input}' does not exist in banking database.",
+                headers={"WWW-Authenticate": "Basic"}
+            )
+
+        cid, cname, fname, email, phone, ccode, uname, db_hash, db_plain = row
+
+        # Verify password (SHA-256 or plaintext fallback)
+        if (db_hash and p_hash != db_hash) and (db_plain and p_input != db_plain):
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Customer authentication failed: Invalid password.",
+                headers={"WWW-Authenticate": "Basic"}
+            )
+
+        # Get customer's accounts
+        cursor.execute("SELECT account_number, account_type, status FROM customer_accounts WHERE customer_id = %s;", (cid,))
+        acc_rows = cursor.fetchall()
+        accounts = [{"account_number": r[0], "account_type": r[1], "status": r[2]} for r in acc_rows]
+        acc_numbers = [r[0].upper() for r in acc_rows]
+
+        # Ownership authorization check if target_account_number specified
+        if target_account_number:
+            tgt_clean = target_account_number.strip().upper()
+            matched = any(tgt_clean == a or tgt_clean in a or a in tgt_clean for a in acc_numbers)
+            if not matched:
+                raise HTTPException(
+                    status_code=status.HTTP_403_FORBIDDEN,
+                    detail=f"Forbidden: Authenticated customer '{cname}' does not own account '{target_account_number}'."
+                )
+
+        # Ownership authorization check if target_ticket_number specified
+        if target_ticket_number:
+            cursor.execute("SELECT customer_id FROM fraud_tickets WHERE ticket_number = %s OR ticket_number ILIKE %s;", (target_ticket_number, f"%{target_ticket_number}%"))
+            t_row = cursor.fetchone()
+            if t_row and t_row[0] != cid:
+                raise HTTPException(
+                    status_code=status.HTTP_403_FORBIDDEN,
+                    detail=f"Forbidden: Authenticated customer '{cname}' is not the owner of ticket '{target_ticket_number}'."
+                )
+
+        return {
+            "customer_id": cid,
+            "customer_name": cname,
+            "full_name": fname,
+            "username": uname or u_input,
+            "email": email,
+            "phone": phone,
+            "customer_code": ccode,
+            "accounts": accounts
+        }
+    finally:
+        cursor.close()
+        conn.close()
+
+@app.post("/api/customer/verify-credentials", tags=["Customer Authentication"])
+async def api_customer_verify_credentials(request: Request):
+    """
+    Verifies Customer Username and Password for AutomationEdge REST workflows.
+    Accepts Basic Auth, JSON body, custom headers, or query parameters.
+    """
+    try:
+        body = await request.json()
+    except Exception:
+        body = {}
+    
+    target_acc = body.get("account_number") or request.query_params.get("account_number")
+    target_ticket = body.get("ticket_number") or request.query_params.get("ticket_number")
+
+    customer = authenticate_customer_credentials(
+        request=request,
+        body_data=body,
+        target_account_number=target_acc,
+        target_ticket_number=target_ticket,
+        require_auth=True
+    )
+
+    return {
+        "success": True,
+        "authenticated": True,
+        "message": f"Customer '{customer['customer_name']}' successfully authenticated.",
+        "customer": customer
+    }
+
+@app.post("/api/customer/login", tags=["Customer Authentication"])
+def api_customer_login(payload: CustomerLoginSchema, request: Request):
+    """
+    Direct endpoint for customer credential validation.
+    """
+    u_input = payload.username.strip().lower()
+    p_input = payload.password.strip()
+    p_hash = hashlib.sha256(p_input.encode("utf-8")).hexdigest()
+
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    try:
+        cursor.execute("""
+            SELECT customer_id, customer_name, full_name, email, phone, customer_code, username, password_hash, plain_password
+            FROM customers
+            WHERE LOWER(username) = %s OR LOWER(email) = %s OR LOWER(customer_code) = %s;
+        """, (u_input, u_input, u_input))
+        row = cursor.fetchone()
+        if not row:
+            raise HTTPException(status_code=401, detail="Invalid customer username, email, or code.")
+
+        cid, cname, fname, email, phone, ccode, uname, db_hash, db_plain = row
+
+        if (db_hash and p_hash != db_hash) and (db_plain and p_input != db_plain):
+            raise HTTPException(status_code=401, detail="Invalid customer password.")
+
+        cursor.execute("SELECT account_number, account_type, status, balance FROM customer_accounts WHERE customer_id = %s;", (cid,))
+        acc_rows = cursor.fetchall()
+        accounts = [{"account_number": r[0], "account_type": r[1], "status": r[2], "balance": float(r[3])} for r in acc_rows]
+
+        token = f"cust_{uuid.uuid4().hex}"
+        return {
+            "success": True,
+            "authenticated": True,
+            "token": token,
+            "customer": {
+                "customer_id": cid,
+                "customer_name": cname,
+                "username": uname,
+                "email": email,
+                "accounts": accounts
+            }
+        }
+    finally:
+        cursor.close()
+        conn.close()
+
+@app.get("/api/customer/credentials-directory", tags=["Customer Authentication"])
+def api_customer_credentials_directory():
+    """
+    Helpful testing directory of active customer accounts and credentials for AutomationEdge Process Studio developers.
+    """
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    try:
+        cursor.execute("""
+            SELECT c.customer_id, c.customer_name, c.username, c.plain_password, c.email, a.account_number, a.status
+            FROM customers c
+            JOIN customer_accounts a ON c.customer_id = a.customer_id
+            WHERE c.username IS NOT NULL
+            ORDER BY c.customer_id
+            LIMIT 25;
+        """)
+        rows = cursor.fetchall()
+        res_list = []
+        for r in rows:
+            pwd = r[3] or "Cust@123"
+            cred_str = f"{r[2]}:{pwd}"
+            b64_header = f"Basic {base64.b64encode(cred_str.encode('utf-8')).decode('utf-8')}"
+            res_list.append({
+                "customer_id": r[0],
+                "customer_name": r[1],
+                "username": r[2],
+                "password": pwd,
+                "email": r[4],
+                "account_number": r[5],
+                "account_status": r[6],
+                "basic_auth_header": b64_header
+            })
+        return res_list
     finally:
         cursor.close()
         conn.close()
@@ -1549,7 +1799,15 @@ async def api_resolve_ticket(
 
     t_identifier = str(t_identifier).strip()
     client_ip = request.client.host if request.client else "127.0.0.1"
-    actor = request.headers.get("X-User-Name") or DEFAULT_INVESTIGATOR
+
+    # Customer Authentication & Ownership Verification (if credentials provided)
+    auth_customer = authenticate_customer_credentials(
+        request=request,
+        body_data=body_json if 'body_json' in locals() and isinstance(body_json, dict) else None,
+        target_ticket_number=t_identifier,
+        require_auth=False
+    )
+    actor = auth_customer["customer_name"] if auth_customer else (request.headers.get("X-User-Name") or DEFAULT_INVESTIGATOR)
 
     conn = get_db_connection()
     conn.autocommit = True
@@ -1746,6 +2004,15 @@ async def api_freeze_account(request: Request):
 
     ticket_num = str(ticket_num).strip() if ticket_num else None
 
+    # Customer Authentication & Ownership Verification (if credentials provided)
+    auth_customer = authenticate_customer_credentials(
+        request=request,
+        body_data=body_json if 'body_json' in locals() and isinstance(body_json, dict) else None,
+        target_account_number=acc_num,
+        target_ticket_number=ticket_num,
+        require_auth=False
+    )
+
     conn = get_db_connection()
     conn.autocommit = True
     cursor = conn.cursor()
@@ -1773,11 +2040,11 @@ async def api_freeze_account(request: Request):
             """, (acc_num, f"%{acc_num}%"))
 
         client_ip = request.client.host if request.client else "127.0.0.1"
-        actor = request.headers.get("X-User-Name") or "AutomationEdge / Core Banking"
+        actor = auth_customer["customer_name"] if auth_customer else (request.headers.get("X-User-Name") or "AutomationEdge / Core Banking")
         cursor.execute("""
             INSERT INTO audit_logs (ticket_number, customer_name, actor, action, details, ip_address)
             VALUES (%s, %s, %s, %s, %s, %s);
-        """, (ticket_num or "MANUAL_LOCK", "Account Owner", actor, "ACCOUNT_EMERGENCY_FREEZE", f"Account {acc_num} frozen in core database (Resolved tickets preserved)", client_ip))
+        """, (ticket_num or "MANUAL_LOCK", auth_customer["customer_name"] if auth_customer else "Account Owner", actor, "ACCOUNT_EMERGENCY_FREEZE", f"Account {acc_num} frozen in core database (Resolved tickets preserved)", client_ip))
 
         conn.commit()
 
@@ -1786,6 +2053,7 @@ async def api_freeze_account(request: Request):
             "account_number": acc_num, 
             "ticket_number": ticket_num,
             "status": "FROZEN",
+            "authenticated_customer": auth_customer["username"] if auth_customer else None,
             "message": f"Bank account {acc_num} locked in database. (Any already resolved tickets remain in history as RESOLVED)."
         }
     except Exception as exc:
@@ -1798,8 +2066,8 @@ async def api_freeze_account(request: Request):
 @app.post("/api/workflow/block-account", tags=["Workflow Automation"])
 async def api_trigger_block_account_workflow(request: Request):
     """
-    Explicit UI action: Triggered ONLY when a user selects a ticket and clicks 'Block Account' on the UI.
-    Dispatches AutomationEdge 'BlockBankAccount' workflow to T4 Cloud Server passing {ticket_number, account_number}.
+    Explicit action: Dispatches AutomationEdge 'BlockBankAccount' workflow to T4 Cloud Server passing {ticket_number, account_number}.
+    Supports Customer Username & Password verification if provided.
     """
     try:
         body = await request.json()
@@ -1808,7 +2076,16 @@ async def api_trigger_block_account_workflow(request: Request):
     
     acc_num = body.get("account_number") or body.get("account_no")
     ticket_num = body.get("ticket_number") or body.get("ticket_no")
-    actor = request.headers.get("X-User-Name") or DEFAULT_INVESTIGATOR
+
+    # Customer Authentication & Ownership Verification (if credentials provided)
+    auth_customer = authenticate_customer_credentials(
+        request=request,
+        body_data=body,
+        target_account_number=acc_num,
+        target_ticket_number=ticket_num,
+        require_auth=False
+    )
+    actor = auth_customer["customer_name"] if auth_customer else (request.headers.get("X-User-Name") or DEFAULT_INVESTIGATOR)
 
     if not acc_num and not ticket_num:
         raise HTTPException(status_code=400, detail="Missing account_number or ticket_number")
@@ -1830,7 +2107,7 @@ async def api_trigger_block_account_workflow(request: Request):
             cursor.execute("""
                 INSERT INTO audit_logs (ticket_number, customer_name, actor, action, details, ip_address)
                 VALUES (%s, %s, %s, %s, %s, %s);
-            """, (ticket_num, "Account Owner", actor, "TRIGGER_AE_BLOCK_ACCOUNT", f"Dispatched T4 workflow '{AE_WORKFLOW_FREEZE_ACCOUNT}' for account {acc_num}", request.client.host if request.client else "127.0.0.1"))
+            """, (ticket_num, auth_customer["customer_name"] if auth_customer else "Account Owner", actor, "TRIGGER_AE_BLOCK_ACCOUNT", f"Dispatched T4 workflow '{AE_WORKFLOW_FREEZE_ACCOUNT}' for account {acc_num}", request.client.host if request.client else "127.0.0.1"))
     finally:
         cursor.close()
         conn.close()
@@ -1838,7 +2115,8 @@ async def api_trigger_block_account_workflow(request: Request):
     # 2. Trigger T4 AutomationEdge workflow ONCE
     ae_dispatch = await trigger_automationedge_workflow(AE_WORKFLOW_FREEZE_ACCOUNT, {
         "ticket_number": ticket_num or "",
-        "account_number": acc_num or ""
+        "account_number": acc_num or "",
+        "customer_username": auth_customer["username"] if auth_customer else ""
     })
 
     return {
@@ -1846,6 +2124,7 @@ async def api_trigger_block_account_workflow(request: Request):
         "workflow": AE_WORKFLOW_FREEZE_ACCOUNT,
         "ticket_number": ticket_num,
         "account_number": acc_num,
+        "authenticated_customer": auth_customer["username"] if auth_customer else None,
         "ae_integration": ae_dispatch,
         "message": f"AutomationEdge workflow '{AE_WORKFLOW_FREEZE_ACCOUNT}' dispatched for ticket {ticket_num} (Account: {acc_num})."
     }
@@ -1854,6 +2133,7 @@ async def api_trigger_block_account_workflow(request: Request):
 async def api_trigger_resolve_ticket_workflow(request: Request):
     """
     Explicit action: Dispatches AutomationEdge 'ResolveFraudTicket' workflow to T4 Cloud Server passing {ticket_number, account_number}.
+    Supports Customer Username & Password verification if provided.
     """
     try:
         body = await request.json()
@@ -1863,7 +2143,16 @@ async def api_trigger_resolve_ticket_workflow(request: Request):
     acc_num = body.get("account_number") or body.get("account_no")
     ticket_num = body.get("ticket_number") or body.get("ticket_no")
     note = body.get("action_taken") or body.get("notes") or "Dispute verified and resolved. Refund credited back to customer."
-    actor = request.headers.get("X-User-Name") or DEFAULT_INVESTIGATOR
+
+    # Customer Authentication & Ownership Verification (if credentials provided)
+    auth_customer = authenticate_customer_credentials(
+        request=request,
+        body_data=body,
+        target_account_number=acc_num,
+        target_ticket_number=ticket_num,
+        require_auth=False
+    )
+    actor = auth_customer["customer_name"] if auth_customer else (request.headers.get("X-User-Name") or DEFAULT_INVESTIGATOR)
 
     if not acc_num and not ticket_num:
         raise HTTPException(status_code=400, detail="Missing account_number or ticket_number")
@@ -1889,7 +2178,7 @@ async def api_trigger_resolve_ticket_workflow(request: Request):
             cursor.execute("""
                 INSERT INTO audit_logs (ticket_number, customer_name, actor, action, details, ip_address)
                 VALUES (%s, %s, %s, %s, %s, %s);
-            """, (ticket_num, "Customer", actor, "STATUS_RESOLVED", f"Ticket marked RESOLVED via T4 workflow '{AE_WORKFLOW_RESOLVE_TICKET}'", request.client.host if request.client else "127.0.0.1"))
+            """, (ticket_num, auth_customer["customer_name"] if auth_customer else "Customer", actor, "STATUS_RESOLVED", f"Ticket marked RESOLVED via T4 workflow '{AE_WORKFLOW_RESOLVE_TICKET}'", request.client.host if request.client else "127.0.0.1"))
     finally:
         cursor.close()
         conn.close()
@@ -1957,6 +2246,15 @@ async def api_unfreeze_account(request: Request):
 
     ticket_num = str(ticket_num).strip() if ticket_num else None
 
+    # Customer Authentication & Ownership Verification (if credentials provided)
+    auth_customer = authenticate_customer_credentials(
+        request=request,
+        body_data=body_json if 'body_json' in locals() and isinstance(body_json, dict) else None,
+        target_account_number=acc_num,
+        target_ticket_number=ticket_num,
+        require_auth=False
+    )
+
     conn = get_db_connection()
     conn.autocommit = True
     cursor = conn.cursor()
@@ -1966,10 +2264,10 @@ async def api_unfreeze_account(request: Request):
         acc_res = cursor.fetchone()
         
         # 2. Get customer info for SMS/Email
-        cust_name = "Account Owner"
-        cust_email = "customer@bank.internal"
-        cust_phone = "+91 9876543210"
-        if acc_res:
+        cust_name = auth_customer["customer_name"] if auth_customer else "Account Owner"
+        cust_email = auth_customer["email"] if auth_customer else "customer@bank.internal"
+        cust_phone = auth_customer["phone"] if auth_customer else "+91 9876543210"
+        if not auth_customer and acc_res:
             c_id = acc_res[0]
             cursor.execute("SELECT full_name, email, phone FROM customers WHERE customer_id = %s;", (c_id,))
             c_row = cursor.fetchone()
@@ -1977,7 +2275,7 @@ async def api_unfreeze_account(request: Request):
                 cust_name, cust_email, cust_phone = c_row
 
         client_ip = request.client.host if request.client else "127.0.0.1"
-        actor = request.headers.get("X-User-Name") or DEFAULT_INVESTIGATOR
+        actor = auth_customer["customer_name"] if auth_customer else (request.headers.get("X-User-Name") or DEFAULT_INVESTIGATOR)
 
         # 3. Audit log entry
         cursor.execute("""
