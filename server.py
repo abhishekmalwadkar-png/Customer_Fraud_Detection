@@ -411,6 +411,14 @@ class CustomerLoginSchema(BaseModel):
     password: str = Field(..., description="Customer password", examples=["Cust@123"])
     account_number: Optional[str] = Field(None, description="Optional target account number to verify ownership", examples=["ACT-3190-8844"])
 
+class AssignTicketSchema(BaseModel):
+    ticket_number: Optional[str] = Field(None, description="Ticket number or ID to assign", examples=["FRD-2026-A1B2C3D4"])
+    ticket_id: Optional[Union[int, str]] = Field(None, description="Ticket ID", examples=[101])
+    assigned_investigator: Optional[str] = Field(None, description="Staff member or username to assign", examples=["Abhishek Malwadkar (High-Value Fraud Forensics)"])
+    assigned_to: Optional[str] = Field(None, description="Alias for assigned_investigator", examples=["investigator3"])
+    staff_name: Optional[str] = Field(None, description="Alias for assigned_investigator", examples=["Abhishek Malwadkar"])
+    action_taken: Optional[str] = Field(None, description="Optional note for assignment audit log", examples=["Assigned to forensics team for investigation."])
+
 # -------------------------------------------------------------
 # Static Frontend Routes
 # -------------------------------------------------------------
@@ -1888,6 +1896,132 @@ async def api_update_ticket(ticket_id: str, payload: FraudTicketUpdateSchema, re
             "ticket_number": ticket_num, 
             "status": status_val, 
             "assigned_investigator": new_assigned
+        }
+    finally:
+        cursor.close()
+        conn.close()
+
+@app.api_route("/api/assign-ticket", methods=["GET", "POST", "PATCH"], tags=["Fraud Operations", "Workflow Automation"])
+@app.post("/api/workflow/assign-ticket", tags=["Workflow Automation"])
+async def api_assign_ticket(
+    request: Request,
+    ticket_id: Optional[str] = None,
+    ticket_number: Optional[str] = None,
+    assigned_investigator: Optional[str] = None,
+    assigned_to: Optional[str] = None,
+    staff_name: Optional[str] = None,
+    action_taken: Optional[str] = None
+):
+    """
+    Dedicated Workflow & API Endpoint to Assign / Reassign a Fraud Ticket to a Staff Officer in PostgreSQL.
+    Accepts JSON body, form data, or URL query parameters via GET/POST/PATCH.
+    Automatically resolves staff usernames (e.g. 'investigator3') or names to active DB staff accounts.
+    """
+    import re
+    t_identifier = ticket_id or ticket_number or request.query_params.get("ticket_id") or request.query_params.get("ticket_number")
+    new_staff = assigned_investigator or assigned_to or staff_name or request.query_params.get("assigned_investigator") or request.query_params.get("assigned_to") or request.query_params.get("staff_name") or request.query_params.get("staff")
+    note = action_taken or request.query_params.get("action_taken")
+
+    # Body inspection
+    body_json = {}
+    try:
+        raw_bytes = await request.body()
+        if raw_bytes:
+            raw_str = raw_bytes.decode("utf-8", errors="ignore").strip()
+            if raw_str.startswith(("{", "[")):
+                body_json = json.loads(raw_str)
+                if isinstance(body_json, dict):
+                    t_identifier = t_identifier or body_json.get("ticket_number") or body_json.get("ticket_id") or body_json.get("ticket_no") or body_json.get("id")
+                    new_staff = new_staff or body_json.get("assigned_investigator") or body_json.get("assigned_to") or body_json.get("staff_name") or body_json.get("staff") or body_json.get("username") or body_json.get("investigator")
+                    note = note or body_json.get("action_taken") or body_json.get("note") or body_json.get("notes")
+            elif "=" in raw_str:
+                form = await request.form()
+                t_identifier = t_identifier or form.get("ticket_number") or form.get("ticket_id") or form.get("ticket_no")
+                new_staff = new_staff or form.get("assigned_investigator") or form.get("assigned_to") or form.get("staff_name") or form.get("staff")
+                note = note or form.get("action_taken")
+            
+            if not t_identifier:
+                match = re.search(r'FRD-[\w-]+', raw_str, re.IGNORECASE)
+                if match:
+                    t_identifier = match.group(0).upper()
+    except Exception as e:
+        logger.warning(f"Error parsing assign-ticket body: {e}")
+
+    if not t_identifier:
+        raise HTTPException(
+            status_code=400,
+            detail="Missing 'ticket_number' or 'ticket_id'. In Process Studio, pass JSON {'ticket_number': 'FRD-2026-XXXX', 'assigned_investigator': 'Abhishek Malwadkar'} or query param ?ticket_number=FRD-XXXX."
+        )
+
+    if not new_staff:
+        raise HTTPException(
+            status_code=400,
+            detail="Missing 'assigned_investigator' (or 'assigned_to' / 'staff_name'). Please specify the staff member name or username."
+        )
+
+    t_identifier = str(t_identifier).strip()
+    new_staff_input = str(new_staff).strip()
+    client_ip = request.client.host if request.client else "127.0.0.1"
+
+    conn = get_db_connection()
+    conn.autocommit = True
+    cursor = conn.cursor()
+    try:
+        # Resolve staff username or partial name against staff_users table
+        cursor.execute("""
+            SELECT full_name, department, role, username
+            FROM staff_users
+            WHERE is_active = TRUE
+              AND (LOWER(username) = LOWER(%s) OR LOWER(full_name) = LOWER(%s) OR LOWER(full_name) ILIKE %s OR LOWER(email) = LOWER(%s))
+            LIMIT 1;
+        """, (new_staff_input, new_staff_input, f"%{new_staff_input.lower()}%", new_staff_input))
+        staff_row = cursor.fetchone()
+
+        if staff_row:
+            s_fname, s_dept, s_role, s_uname = staff_row
+            resolved_staff_str = f"{s_fname} ({s_dept})" if s_dept else s_fname
+        else:
+            resolved_staff_str = new_staff_input
+
+        # Update the fraud ticket in PostgreSQL
+        cursor.execute("""
+            UPDATE fraud_tickets
+            SET assigned_investigator = %s,
+                action_taken = COALESCE(%s, action_taken),
+                updated_at = CURRENT_TIMESTAMP
+            WHERE ticket_id = %s OR ticket_number = %s OR ticket_number ILIKE %s
+            RETURNING ticket_id, ticket_number, customer_id, customer_name, account_number, assigned_investigator, status;
+        """, (
+            resolved_staff_str,
+            note or f"Ticket assigned to {resolved_staff_str}",
+            int(t_identifier) if t_identifier.isdigit() else -1,
+            t_identifier,
+            f"%{t_identifier}%"
+        ))
+        row = cursor.fetchone()
+
+        if not row:
+            raise HTTPException(status_code=404, detail=f"Fraud ticket '{t_identifier}' not found in database.")
+
+        t_id, t_num, c_id, c_name, a_num, assigned_name, cur_status = row
+
+        # Audit Log
+        actor = request.headers.get("X-User-Name") or "AutomationEdge Workflow / Operations"
+        cursor.execute("""
+            INSERT INTO audit_logs (ticket_number, customer_name, actor, action, details, ip_address)
+            VALUES (%s, %s, %s, %s, %s, %s);
+        """, (t_num, c_name, actor, "STAFF_ASSIGNMENT", f"Ticket {t_num} assigned to staff officer: {assigned_name}. Note: {note or 'Workflow assignment'}", client_ip))
+
+        return {
+            "success": True,
+            "ticket_id": t_id,
+            "ticket_number": t_num,
+            "customer_name": c_name,
+            "account_number": a_num,
+            "assigned_investigator": assigned_name,
+            "status": cur_status,
+            "action_taken": note or f"Ticket assigned to {assigned_name}",
+            "message": f"Fraud ticket {t_num} successfully assigned to {assigned_name}."
         }
     finally:
         cursor.close()
