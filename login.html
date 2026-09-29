@@ -3,30 +3,31 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Staff Login | Apex Trust Bank - Fraud Risk Operations</title>
-  <meta name="description" content="Authorized Staff & Investigator Login Portal for Apex Trust Bank Cyber Risk & Fraud Management System.">
+  <title>Staff Intranet Portal | Apex Trust Bank</title>
+  <meta name="description" content="Authorized Staff & Fraud Operations Login Portal for Apex Trust Bank.">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=JetBrains+Mono:wght@500;600&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@500;600&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
   <style>
     :root {
-      --bg-base: #060913;
-      --bg-card: rgba(15, 23, 42, 0.75);
-      --bg-card-hover: rgba(30, 41, 59, 0.85);
-      --primary: #2563eb;
-      --primary-glow: rgba(37, 99, 235, 0.35);
-      --primary-light: #60a5fa;
-      --accent-cyan: #06b6d4;
-      --accent-emerald: #10b981;
-      --accent-amber: #f59e0b;
-      --accent-rose: #f43f5e;
-      --text-main: #f8fafc;
-      --text-muted: #94a3b8;
+      --bank-navy: #0a192f;
+      --bank-blue: #004b87;
+      --bank-primary: #0056b3;
+      --bank-accent: #0284c7;
+      --bank-gold: #b45309;
+      --bank-light-gold: #fef3c7;
+      --surface-bg: #f1f5f9;
+      --card-bg: #ffffff;
+      --text-dark: #0f172a;
+      --text-muted: #475569;
       --text-dim: #64748b;
-      --border-subtle: rgba(255, 255, 255, 0.08);
-      --border-focus: rgba(96, 165, 250, 0.5);
-      --font-sans: 'Plus Jakarta Sans', system-ui, -apple-system, sans-serif;
+      --border-color: #cbd5e1;
+      --border-light: #e2e8f0;
+      --radius-sm: 6px;
+      --radius-md: 10px;
+      --radius-lg: 14px;
+      --font-main: 'Inter', system-ui, -apple-system, sans-serif;
       --font-mono: 'JetBrains Mono', monospace;
     }
 
@@ -36,210 +37,301 @@
       padding: 0;
     }
 
-    body {
-      font-family: var(--font-sans);
-      background-color: var(--bg-base);
-      color: var(--text-main);
-      min-height: 100vh;
+    html, body {
+      height: 100%;
+      font-family: var(--font-main);
+      background-color: var(--surface-bg);
+      color: var(--text-dark);
       display: flex;
       flex-direction: column;
-      align-items: center;
-      justify-content: center;
-      position: relative;
       overflow-x: hidden;
-      padding: 24px 16px;
     }
 
-    /* Ambient Cyber Background Grid & Glows */
-    .cyber-bg {
-      position: fixed;
-      top: 0;
-      left: 0;
-      width: 100%;
-      height: 100%;
-      background: 
-        radial-gradient(circle at 20% 20%, rgba(37, 99, 235, 0.15) 0%, transparent 40%),
-        radial-gradient(circle at 80% 80%, rgba(6, 182, 212, 0.12) 0%, transparent 40%),
-        radial-gradient(circle at 50% 50%, rgba(16, 185, 129, 0.05) 0%, transparent 50%),
-        linear-gradient(to bottom, #060913 0%, #0a0f1d 100%);
-      z-index: -2;
+    /* Top Institutional Bank Header */
+    .bank-header {
+      background: #ffffff;
+      border-bottom: 2px solid #e2e8f0;
+      padding: 12px 32px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+      z-index: 10;
     }
 
-    .cyber-grid {
-      position: fixed;
-      top: 0;
-      left: 0;
-      width: 100%;
-      height: 100%;
-      background-size: 40px 40px;
-      background-image: 
-        linear-gradient(to right, rgba(255, 255, 255, 0.02) 1px, transparent 1px),
-        linear-gradient(to bottom, rgba(255, 255, 255, 0.02) 1px, transparent 1px);
-      z-index: -1;
-      mask-image: radial-gradient(circle at center, black 40%, transparent 80%);
-      -webkit-mask-image: radial-gradient(circle at center, black 40%, transparent 80%);
-    }
-
-    /* Top Brand Indicator */
-    .brand-header {
+    .bank-brand {
       display: flex;
       align-items: center;
       gap: 14px;
-      margin-bottom: 24px;
-      animation: fadeInDown 0.6s ease-out;
     }
 
-    .brand-icon-wrap {
-      width: 48px;
-      height: 48px;
-      background: linear-gradient(135deg, #1e3a8a 0%, #2563eb 100%);
-      border-radius: 12px;
+    .bank-logo-crest {
+      width: 42px;
+      height: 42px;
+      background: linear-gradient(135deg, #004b87 0%, #002d54 100%);
+      border-radius: 8px;
       display: flex;
       align-items: center;
       justify-content: center;
-      font-size: 22px;
       color: #ffffff;
-      box-shadow: 0 0 20px rgba(37, 99, 235, 0.4);
-      border: 1px solid rgba(255, 255, 255, 0.15);
-    }
-
-    .brand-text h1 {
       font-size: 20px;
-      font-weight: 800;
-      letter-spacing: 0.5px;
-      color: #ffffff;
-      display: flex;
-      align-items: center;
-      gap: 8px;
+      box-shadow: 0 2px 8px rgba(0, 75, 135, 0.25);
     }
 
-    .brand-text p {
-      font-size: 12px;
-      color: var(--accent-cyan);
+    .bank-titles h1 {
+      font-size: 17px;
+      font-weight: 800;
+      color: #003366;
+      letter-spacing: 0.5px;
+      line-height: 1.2;
+    }
+
+    .bank-titles p {
+      font-size: 11px;
+      color: var(--text-dim);
       font-weight: 600;
-      letter-spacing: 0.3px;
+      letter-spacing: 0.4px;
       text-transform: uppercase;
     }
 
-    /* Main Login Container Card */
-    .login-card {
+    .header-security-badges {
+      display: flex;
+      align-items: center;
+      gap: 20px;
+      font-size: 12px;
+      color: var(--text-muted);
+    }
+
+    .sec-item {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      font-weight: 500;
+    }
+
+    .sec-item i {
+      color: #059669;
+    }
+
+    .sec-item.helpdesk i {
+      color: var(--bank-blue);
+    }
+
+    /* Main Center Wrapper */
+    .portal-main {
+      flex: 1;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 30px 20px;
+      background: 
+        radial-gradient(circle at 10% 20%, rgba(0, 75, 135, 0.04) 0%, transparent 40%),
+        radial-gradient(circle at 90% 80%, rgba(2, 132, 199, 0.04) 0%, transparent 40%),
+        #f8fafc;
+    }
+
+    .login-wrapper {
       width: 100%;
-      max-width: 460px;
-      background: var(--bg-card);
-      backdrop-filter: blur(20px);
-      -webkit-backdrop-filter: blur(20px);
-      border: 1px solid var(--border-subtle);
-      border-radius: 20px;
-      padding: 36px 32px;
-      box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.6), 0 0 0 1px rgba(255, 255, 255, 0.05);
-      animation: fadeInUp 0.7s ease-out;
+      max-width: 980px;
+      background: #ffffff;
+      border-radius: var(--radius-lg);
+      border: 1px solid var(--border-light);
+      box-shadow: 0 10px 30px -5px rgba(0, 0, 0, 0.08), 0 2px 6px -1px rgba(0, 0, 0, 0.04);
+      display: grid;
+      grid-template-columns: 1.1fr 1fr;
+      overflow: hidden;
+    }
+
+    /* Left Enterprise Banner Column */
+    .login-left-banner {
+      background: linear-gradient(145deg, #0a1e3b 0%, #003366 100%);
+      color: #ffffff;
+      padding: 40px 36px;
+      display: flex;
+      flex-direction: column;
+      justify-content: space-between;
       position: relative;
     }
 
-    .login-card::before {
+    .login-left-banner::before {
       content: "";
       position: absolute;
       top: 0;
-      left: 15%;
-      right: 15%;
-      height: 2px;
-      background: linear-gradient(90deg, transparent, var(--primary-light), var(--accent-cyan), transparent);
+      left: 0;
+      right: 0;
+      bottom: 0;
+      background-image: radial-gradient(rgba(255, 255, 255, 0.08) 1px, transparent 1px);
+      background-size: 20px 20px;
+      opacity: 0.5;
     }
 
-    .card-title-row {
-      text-align: center;
-      margin-bottom: 26px;
+    .left-content {
+      position: relative;
+      z-index: 1;
     }
 
-    .card-title-row h2 {
-      font-size: 22px;
-      font-weight: 700;
-      color: #ffffff;
-      margin-bottom: 6px;
-    }
-
-    .card-title-row p {
-      font-size: 13px;
-      color: var(--text-muted);
-      line-height: 1.4;
-    }
-
-    /* Live Security Status Pill */
-    .sec-badge {
+    .left-tag {
       display: inline-flex;
       align-items: center;
-      gap: 8px;
-      padding: 5px 12px;
-      background: rgba(16, 185, 129, 0.1);
-      border: 1px solid rgba(16, 185, 129, 0.25);
+      gap: 6px;
+      padding: 4px 10px;
+      background: rgba(255, 255, 255, 0.12);
+      border: 1px solid rgba(255, 255, 255, 0.2);
       border-radius: 20px;
       font-size: 11px;
-      color: #6ee7b7;
       font-weight: 600;
-      margin-bottom: 22px;
+      color: #7dd3fc;
+      margin-bottom: 20px;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
     }
 
-    .sec-pulse {
-      width: 7px;
-      height: 7px;
-      background-color: var(--accent-emerald);
-      border-radius: 50%;
-      box-shadow: 0 0 8px var(--accent-emerald);
-      animation: pulse 2s infinite;
+    .left-content h2 {
+      font-size: 24px;
+      font-weight: 700;
+      line-height: 1.3;
+      margin-bottom: 12px;
+      color: #ffffff;
     }
 
-    /* Form Fields */
-    .form-group {
+    .left-content p {
+      font-size: 13.5px;
+      color: #cbd5e1;
+      line-height: 1.6;
+      margin-bottom: 24px;
+    }
+
+    .feature-list {
+      list-style: none;
+      display: flex;
+      flex-direction: column;
+      gap: 14px;
+      margin-bottom: 28px;
+    }
+
+    .feature-item {
+      display: flex;
+      align-items: flex-start;
+      gap: 12px;
+      font-size: 13px;
+      color: #e2e8f0;
+    }
+
+    .feature-item i {
+      font-size: 14px;
+      color: #38bdf8;
+      margin-top: 2px;
+    }
+
+    .security-bulletin {
+      background: rgba(0, 0, 0, 0.25);
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      border-radius: var(--radius-md);
+      padding: 14px;
+      font-size: 12px;
+      color: #94a3b8;
+      line-height: 1.5;
+    }
+
+    .security-bulletin strong {
+      color: #fbbf24;
+      display: block;
+      margin-bottom: 4px;
+      font-size: 11.5px;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+
+    /* Right Authentication Form Column */
+    .login-right-form {
+      padding: 40px 36px;
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      background: #ffffff;
+    }
+
+    .form-header {
+      margin-bottom: 24px;
+    }
+
+    .form-header h3 {
+      font-size: 20px;
+      font-weight: 700;
+      color: #0f172a;
+      margin-bottom: 4px;
+    }
+
+    .form-header p {
+      font-size: 13px;
+      color: var(--text-dim);
+    }
+
+    .login-alert {
+      display: none;
+      padding: 10px 14px;
+      border-radius: var(--radius-sm);
+      font-size: 12.5px;
       margin-bottom: 18px;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .alert-error {
+      background: #fef2f2;
+      border: 1px solid #fecaca;
+      color: #991b1b;
+    }
+
+    .alert-success {
+      background: #ecfdf5;
+      border: 1px solid #a7f3d0;
+      color: #065f46;
+    }
+
+    .form-group {
+      margin-bottom: 16px;
     }
 
     .form-group label {
       display: block;
       font-size: 12px;
       font-weight: 600;
-      color: var(--text-muted);
+      color: #334155;
       margin-bottom: 6px;
-      text-transform: uppercase;
-      letter-spacing: 0.5px;
     }
 
-    .input-wrap {
+    .input-wrapper {
       position: relative;
       display: flex;
       align-items: center;
     }
 
-    .input-wrap i.prefix-icon {
+    .input-wrapper i.prefix-icon {
       position: absolute;
-      left: 14px;
+      left: 12px;
+      color: #94a3b8;
       font-size: 14px;
-      color: var(--text-dim);
       pointer-events: none;
-      transition: color 0.2s;
     }
 
-    .input-field {
+    .form-control {
       width: 100%;
-      padding: 12px 42px 12px 40px;
-      background: rgba(10, 15, 29, 0.65);
-      border: 1px solid rgba(255, 255, 255, 0.1);
-      border-radius: 10px;
-      color: #ffffff;
-      font-size: 14px;
+      padding: 10px 36px 10px 36px;
+      font-size: 13.5px;
       font-family: inherit;
+      border: 1px solid #cbd5e1;
+      border-radius: var(--radius-sm);
+      color: #0f172a;
+      background: #f8fafc;
+      transition: all 0.2s ease;
       outline: none;
-      transition: all 0.25s ease;
     }
 
-    .input-field:focus {
-      border-color: var(--primary-light);
-      background: rgba(15, 23, 42, 0.9);
-      box-shadow: 0 0 0 3px var(--primary-glow);
-    }
-
-    .input-field:focus + i.prefix-icon,
-    .input-wrap:focus-within i.prefix-icon {
-      color: var(--primary-light);
+    .form-control:focus {
+      background: #ffffff;
+      border-color: var(--bank-primary);
+      box-shadow: 0 0 0 3px rgba(0, 86, 179, 0.15);
     }
 
     .btn-toggle-pwd {
@@ -247,124 +339,81 @@
       right: 12px;
       background: none;
       border: none;
-      color: var(--text-dim);
+      color: #94a3b8;
       cursor: pointer;
       font-size: 14px;
-      padding: 4px;
-      transition: color 0.2s;
     }
 
     .btn-toggle-pwd:hover {
-      color: var(--text-main);
+      color: #334155;
     }
 
     .form-options {
       display: flex;
-      align-items: center;
       justify-content: space-between;
+      align-items: center;
       font-size: 12px;
-      margin-bottom: 22px;
-      color: var(--text-muted);
+      margin-bottom: 20px;
+      color: var(--text-dim);
     }
 
-    .remember-wrap {
+    .remember-check {
       display: flex;
       align-items: center;
       gap: 6px;
       cursor: pointer;
     }
 
-    .remember-wrap input[type="checkbox"] {
-      accent-color: var(--primary);
-      width: 14px;
-      height: 14px;
+    .remember-check input {
+      accent-color: var(--bank-primary);
       cursor: pointer;
     }
 
-    .security-link {
-      color: var(--accent-cyan);
-      text-decoration: none;
-      font-weight: 500;
-      display: flex;
-      align-items: center;
-      gap: 4px;
-    }
-
-    .security-link:hover {
-      text-decoration: underline;
-    }
-
-    /* Submit Button */
-    .btn-login {
+    .btn-signin {
       width: 100%;
-      padding: 13px 20px;
-      background: linear-gradient(135deg, #2563eb 0%, #1d4ed8 100%);
+      padding: 12px 18px;
+      background: linear-gradient(180deg, #0056b3 0%, #004085 100%);
       color: #ffffff;
-      border: none;
-      border-radius: 10px;
-      font-size: 15px;
+      border: 1px solid #003366;
+      border-radius: var(--radius-sm);
+      font-size: 14px;
       font-weight: 700;
       cursor: pointer;
       display: flex;
       align-items: center;
       justify-content: center;
-      gap: 10px;
-      box-shadow: 0 4px 15px rgba(37, 99, 235, 0.4);
-      transition: all 0.25s ease;
+      gap: 8px;
+      box-shadow: 0 2px 6px rgba(0, 64, 133, 0.2);
+      transition: all 0.2s ease;
       font-family: inherit;
     }
 
-    .btn-login:hover {
-      background: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%);
-      box-shadow: 0 6px 20px rgba(37, 99, 235, 0.6);
-      transform: translateY(-1px);
+    .btn-signin:hover {
+      background: linear-gradient(180deg, #0062cc 0%, #004b99 100%);
+      box-shadow: 0 4px 12px rgba(0, 64, 133, 0.3);
     }
 
-    .btn-login:active {
-      transform: translateY(0);
+    .btn-signin:active {
+      transform: translateY(1px);
     }
 
-    .btn-login:disabled {
+    .btn-signin:disabled {
       opacity: 0.7;
       cursor: not-allowed;
-      transform: none;
     }
 
-    /* Error / Alert Banner */
-    .login-alert {
-      display: none;
-      padding: 10px 14px;
-      border-radius: 8px;
-      font-size: 13px;
-      margin-bottom: 18px;
-      align-items: center;
-      gap: 8px;
+    /* Quick Demo Profile Selector Section */
+    .quick-demo-section {
+      margin-top: 24px;
+      padding-top: 18px;
+      border-top: 1px dashed var(--border-color);
     }
 
-    .alert-error {
-      background: rgba(239, 68, 68, 0.15);
-      border: 1px solid rgba(239, 68, 68, 0.3);
-      color: #fca5a5;
-    }
-
-    .alert-success {
-      background: rgba(16, 185, 129, 0.15);
-      border: 1px solid rgba(16, 185, 129, 0.3);
-      color: #86efac;
-    }
-
-    /* Quick Demo Profile Switcher Section */
-    .demo-section {
-      margin-top: 26px;
-      padding-top: 20px;
-      border-top: 1px solid var(--border-subtle);
-    }
-
-    .demo-header {
+    .quick-demo-title {
       font-size: 11px;
       font-weight: 700;
       text-transform: uppercase;
-      letter-spacing: 0.6px;
+      letter-spacing: 0.5px;
       color: var(--text-dim);
       margin-bottom: 10px;
       display: flex;
@@ -372,245 +421,303 @@
       justify-content: space-between;
     }
 
-    .demo-grid {
+    .demo-chips-grid {
       display: grid;
       grid-template-columns: repeat(2, 1fr);
-      gap: 8px;
+      gap: 6px;
     }
 
-    .demo-user-btn {
-      background: rgba(15, 23, 42, 0.6);
-      border: 1px solid var(--border-subtle);
-      border-radius: 8px;
-      padding: 8px 10px;
-      color: var(--text-muted);
+    .demo-chip {
+      background: #f1f5f9;
+      border: 1px solid #e2e8f0;
+      border-radius: 6px;
+      padding: 6px 10px;
+      font-size: 11.5px;
       cursor: pointer;
-      text-align: left;
       display: flex;
       align-items: center;
       gap: 8px;
-      transition: all 0.2s;
+      text-align: left;
+      transition: all 0.15s ease;
+      color: #334155;
     }
 
-    .demo-user-btn:hover {
-      background: rgba(30, 41, 59, 0.9);
-      border-color: rgba(96, 165, 250, 0.4);
-      color: #ffffff;
+    .demo-chip:hover {
+      background: #e0f2fe;
+      border-color: #7dd3fc;
+      color: #0369a1;
       transform: translateY(-1px);
     }
 
-    .demo-avatar {
-      width: 26px;
-      height: 26px;
+    .chip-avatar {
+      width: 22px;
+      height: 22px;
       border-radius: 50%;
-      background: #1e293b;
+      background: #004b87;
+      color: #ffffff;
+      font-size: 10px;
+      font-weight: 700;
       display: flex;
       align-items: center;
       justify-content: center;
-      font-size: 11px;
-      font-weight: 700;
-      color: var(--accent-cyan);
       flex-shrink: 0;
     }
 
-    .demo-details {
-      overflow: hidden;
-    }
-
-    .demo-name {
-      font-size: 11px;
-      font-weight: 700;
-      color: var(--text-main);
+    .chip-name {
+      font-weight: 600;
       white-space: nowrap;
       overflow: hidden;
       text-overflow: ellipsis;
     }
 
-    .demo-role {
+    .chip-role {
       font-size: 9.5px;
       color: var(--text-dim);
     }
 
-    /* Footer Regulatory Note */
-    .portal-footer {
-      margin-top: 24px;
-      text-align: center;
-      font-size: 11px;
+    /* Institutional Bank Footer */
+    .bank-footer {
+      background: #ffffff;
+      border-top: 1px solid var(--border-light);
+      padding: 14px 32px;
+      font-size: 11.5px;
       color: var(--text-dim);
-      max-width: 440px;
-      line-height: 1.5;
-      animation: fadeIn 1s ease-out;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
     }
 
-    .portal-footer i {
-      color: var(--accent-emerald);
-      margin-right: 4px;
+    .footer-left {
+      display: flex;
+      align-items: center;
+      gap: 8px;
     }
 
-    /* Spinner Animation */
+    .footer-right {
+      display: flex;
+      align-items: center;
+      gap: 16px;
+    }
+
+    .footer-right a {
+      color: var(--text-dim);
+      text-decoration: none;
+    }
+
+    .footer-right a:hover {
+      color: var(--bank-blue);
+      text-decoration: underline;
+    }
+
+    /* Responsive */
+    @media (max-width: 820px) {
+      .login-wrapper {
+        grid-template-columns: 1fr;
+      }
+      .login-left-banner {
+        display: none;
+      }
+      .bank-header, .bank-footer {
+        padding: 12px 16px;
+      }
+    }
+
     .spinner {
-      width: 16px;
-      height: 16px;
-      border: 2px solid rgba(255, 255, 255, 0.3);
+      width: 14px;
+      height: 14px;
+      border: 2px solid rgba(255, 255, 255, 0.4);
       border-top-color: #ffffff;
       border-radius: 50%;
-      animation: spin 0.7s linear infinite;
+      animation: spin 0.6s linear infinite;
     }
 
     @keyframes spin {
       to { transform: rotate(360deg); }
     }
-
-    @keyframes pulse {
-      0%, 100% { opacity: 1; transform: scale(1); }
-      50% { opacity: 0.4; transform: scale(0.85); }
-    }
-
-    @keyframes fadeInUp {
-      from { opacity: 0; transform: translateY(18px); }
-      to { opacity: 1; transform: translateY(0); }
-    }
-
-    @keyframes fadeInDown {
-      from { opacity: 0; transform: translateY(-18px); }
-      to { opacity: 1; transform: translateY(0); }
-    }
-
-    @keyframes fadeIn {
-      from { opacity: 0; }
-      to { opacity: 1; }
-    }
   </style>
 </head>
 <body>
 
-  <div class="cyber-bg"></div>
-  <div class="cyber-grid"></div>
-
-  <!-- Bank Brand Header -->
-  <header class="brand-header">
-    <div class="brand-icon-wrap">
-      <i class="fa-solid fa-shield-halved"></i>
+  <!-- Top Institutional Header -->
+  <header class="bank-header">
+    <div class="bank-brand">
+      <div class="bank-logo-crest">
+        <i class="fa-solid fa-building-columns"></i>
+      </div>
+      <div class="bank-titles">
+        <h1>APEX TRUST BANK</h1>
+        <p>Fraud Operations & Risk Management Gateway</p>
+      </div>
     </div>
-    <div class="brand-text">
-      <h1>APEX TRUST BANK</h1>
-      <p><i class="fa-solid fa-bolt" style="font-size: 10px;"></i> Cyber Risk & Anti-Fraud Center</p>
+
+    <div class="header-security-badges">
+      <div class="sec-item">
+        <i class="fa-solid fa-lock"></i>
+        <span>256-Bit SSL Encrypted</span>
+      </div>
+      <div class="sec-item">
+        <i class="fa-solid fa-circle-check"></i>
+        <span>SOC 2 Type II Certified</span>
+      </div>
+      <div class="sec-item helpdesk">
+        <i class="fa-solid fa-headset"></i>
+        <span>Internal IT Helpdesk: Ext. 4040</span>
+      </div>
     </div>
   </header>
 
-  <!-- Login Card -->
-  <main class="login-card" id="loginCard">
-    <div class="card-title-row">
-      <div class="sec-badge">
-        <span class="sec-pulse"></span>
-        <span>AutomationEdge RPA & Core Banking Active</span>
-      </div>
-      <h2>Staff Authentication</h2>
-      <p>Enter authorized officer credentials to access the live fraud triage queue & automation workflows.</p>
-    </div>
+  <!-- Main Center Content -->
+  <main class="portal-main">
+    <div class="login-wrapper">
+      
+      <!-- Left Corporate Info Column -->
+      <section class="login-left-banner">
+        <div class="left-content">
+          <div class="left-tag">
+            <i class="fa-solid fa-shield-halved"></i> Internal Staff Network
+          </div>
+          <h2>Enterprise Fraud Triage & Core RPA Automation</h2>
+          <p>Secure workspace for banking officers, fraud investigators, and compliance officers to manage dispute cases and automated account freezes.</p>
 
-    <!-- Alert Container -->
-    <div class="login-alert" id="loginAlert">
-      <i class="fa-solid fa-triangle-exclamation" id="alertIcon"></i>
-      <span id="alertMessage">Invalid username or password</span>
-    </div>
-
-    <!-- Login Form -->
-    <form id="staffLoginForm" autocomplete="on">
-      <div class="form-group">
-        <label for="usernameInput">Officer Username / Work Email</label>
-        <div class="input-wrap">
-          <input 
-            type="text" 
-            id="usernameInput" 
-            class="input-field" 
-            placeholder="e.g. investigator3 or abhishek.m@bank.internal" 
-            required 
-            autofocus
-          >
-          <i class="fa-solid fa-user-shield prefix-icon"></i>
+          <ul class="feature-list">
+            <li class="feature-item">
+              <i class="fa-solid fa-bolt"></i>
+              <span><strong>AutomationEdge Cloud RPA:</strong> Real-time automated bank account locking and dispute resolution workflows.</span>
+            </li>
+            <li class="feature-item">
+              <i class="fa-solid fa-database"></i>
+              <span><strong>PostgreSQL Core DB:</strong> Live transaction telemetry and customer 360 profile intelligence.</span>
+            </li>
+            <li class="feature-item">
+              <i class="fa-solid fa-user-shield"></i>
+              <span><strong>RBI Audit & SAR Ready:</strong> Complete immutable audit logging for all transactional interventions.</span>
+            </li>
+          </ul>
         </div>
-      </div>
 
-      <div class="form-group">
-        <label for="passwordInput">Security Password</label>
-        <div class="input-wrap">
-          <input 
-            type="password" 
-            id="passwordInput" 
-            class="input-field" 
-            placeholder="Enter security password..." 
-            required
-          >
-          <i class="fa-solid fa-lock prefix-icon"></i>
-          <button type="button" class="btn-toggle-pwd" id="btnTogglePassword" title="Show / Hide Password" aria-label="Toggle password visibility">
-            <i class="fa-regular fa-eye" id="pwdEyeIcon"></i>
+        <div class="security-bulletin">
+          <strong><i class="fa-solid fa-triangle-exclamation"></i> Security Advisory</strong>
+          Authorized bank personnel only. All access, IP addresses, and operational decisions are strictly recorded in the institutional audit log.
+        </div>
+      </section>
+
+      <!-- Right Staff Login Form -->
+      <section class="login-right-form">
+        <div class="form-header">
+          <h3>Staff Authentication</h3>
+          <p>Please enter your employee credentials to continue.</p>
+        </div>
+
+        <!-- Alert Notification Box -->
+        <div class="login-alert" id="loginAlert">
+          <i class="fa-solid fa-circle-exclamation" id="alertIcon"></i>
+          <span id="alertMessage">Invalid employee ID or password</span>
+        </div>
+
+        <form id="staffLoginForm" autocomplete="on">
+          <div class="form-group">
+            <label for="usernameInput">Employee Username / Work Email</label>
+            <div class="input-wrapper">
+              <i class="fa-solid fa-user prefix-icon"></i>
+              <input 
+                type="text" 
+                id="usernameInput" 
+                class="form-control" 
+                placeholder="e.g. investigator3 or abhishek.m@bank.internal" 
+                required 
+                autofocus
+              >
+            </div>
+          </div>
+
+          <div class="form-group">
+            <label for="passwordInput">Security Password</label>
+            <div class="input-wrapper">
+              <i class="fa-solid fa-key prefix-icon"></i>
+              <input 
+                type="password" 
+                id="passwordInput" 
+                class="form-control" 
+                placeholder="Enter password..." 
+                required
+              >
+              <button type="button" class="btn-toggle-pwd" id="btnTogglePassword" title="Show/Hide Password" aria-label="Toggle password visibility">
+                <i class="fa-regular fa-eye" id="pwdEyeIcon"></i>
+              </button>
+            </div>
+          </div>
+
+          <div class="form-options">
+            <label class="remember-check">
+              <input type="checkbox" id="rememberMe" checked>
+              <span>Remember Employee ID</span>
+            </label>
+            <span style="color: var(--text-dim); font-size: 11.5px;">Domain: <strong>INTERNAL_HQ</strong></span>
+          </div>
+
+          <button type="submit" class="btn-signin" id="btnSubmitLogin">
+            <span id="btnText">Sign In to Dashboard</span>
+            <i class="fa-solid fa-arrow-right" id="btnIcon"></i>
           </button>
+        </form>
+
+        <!-- Quick Demo Switcher -->
+        <div class="quick-demo-section">
+          <div class="quick-demo-title">
+            <span><i class="fa-solid fa-users"></i> Demo Staff Accounts:</span>
+            <span style="font-weight: 500; text-transform: none; color: #0284c7;">Click to login</span>
+          </div>
+
+          <div class="demo-chips-grid">
+            <button type="button" class="demo-chip" data-user="investigator3" data-pass="Password@123">
+              <div class="chip-avatar">AM</div>
+              <div>
+                <div class="chip-name">Abhishek M.</div>
+                <div class="chip-role">High-Value Fraud</div>
+              </div>
+            </button>
+
+            <button type="button" class="demo-chip" data-user="manager" data-pass="Password@123">
+              <div class="chip-avatar" style="background: #065f46;">VM</div>
+              <div>
+                <div class="chip-name">Vikram Malhotra</div>
+                <div class="chip-role">Branch Manager</div>
+              </div>
+            </button>
+
+            <button type="button" class="demo-chip" data-user="investigator2" data-pass="Password@123">
+              <div class="chip-avatar" style="background: #92400e;">PB</div>
+              <div>
+                <div class="chip-name">Pooja Bansal</div>
+                <div class="chip-role">Customer Disputes</div>
+              </div>
+            </button>
+
+            <button type="button" class="demo-chip" data-user="investigator1" data-pass="Password@123">
+              <div class="chip-avatar" style="background: #831843;">SOC</div>
+              <div>
+                <div class="chip-name">SOC Operations</div>
+                <div class="chip-role">Cyber Defense Unit</div>
+              </div>
+            </button>
+          </div>
         </div>
-      </div>
+      </section>
 
-      <div class="form-options">
-        <label class="remember-wrap">
-          <input type="checkbox" id="rememberMe" checked>
-          <span>Remember Officer ID</span>
-        </label>
-        <span class="security-link">
-          <i class="fa-solid fa-lock" style="font-size: 10px;"></i> 256-Bit SSL
-        </span>
-      </div>
-
-      <button type="submit" class="btn-login" id="btnSubmitLogin">
-        <span id="btnText">Sign In to Dashboard</span>
-        <i class="fa-solid fa-arrow-right" id="btnIcon"></i>
-      </button>
-    </form>
-
-    <!-- 1-Click Quick Demo Profiles Switcher -->
-    <div class="demo-section">
-      <div class="demo-header">
-        <span><i class="fa-solid fa-users-gear"></i> Quick Demo Staff Login:</span>
-        <span style="font-size: 10px; color: var(--accent-cyan);">Click any to sign in</span>
-      </div>
-      <div class="demo-grid" id="demoProfilesGrid">
-        <button type="button" class="demo-user-btn" data-user="investigator3" data-pass="Password@123">
-          <div class="demo-avatar" style="background: rgba(37, 99, 235, 0.2); color: #60a5fa;">AM</div>
-          <div class="demo-details">
-            <div class="demo-name">Abhishek M.</div>
-            <div class="demo-role">High-Value Fraud</div>
-          </div>
-        </button>
-
-        <button type="button" class="demo-user-btn" data-user="manager" data-pass="Password@123">
-          <div class="demo-avatar" style="background: rgba(16, 185, 129, 0.2); color: #34d399;">VM</div>
-          <div class="demo-details">
-            <div class="demo-name">Vikram Malhotra</div>
-            <div class="demo-role">Branch Manager (All)</div>
-          </div>
-        </button>
-
-        <button type="button" class="demo-user-btn" data-user="investigator2" data-pass="Password@123">
-          <div class="demo-avatar" style="background: rgba(245, 158, 11, 0.2); color: #fbbf24;">PB</div>
-          <div class="demo-details">
-            <div class="demo-name">Pooja Bansal</div>
-            <div class="demo-role">Customer Disputes</div>
-          </div>
-        </button>
-
-        <button type="button" class="demo-user-btn" data-user="investigator1" data-pass="Password@123">
-          <div class="demo-avatar" style="background: rgba(244, 63, 94, 0.2); color: #fb7185;">SOC</div>
-          <div class="demo-details">
-            <div class="demo-name">SOC Operations</div>
-            <div class="demo-role">Cyber Defense Unit</div>
-          </div>
-        </button>
-      </div>
     </div>
   </main>
 
-  <!-- Compliance & Regulatory Footer -->
-  <footer class="portal-footer">
-    <p><i class="fa-solid fa-building-shield"></i> <strong>Apex Trust Bank Operations Gateway</strong></p>
-    <p>Restricted to authorized personnel. All session access and transactional operations are monitored and recorded for RBI audit compliance.</p>
+  <!-- Bottom Institutional Footer -->
+  <footer class="bank-footer">
+    <div class="footer-left">
+      <i class="fa-solid fa-lock" style="color: #059669;"></i>
+      <span>Apex Trust Bank (India) Limited • Enterprise Fraud Management Gateway v3.4</span>
+    </div>
+    <div class="footer-right">
+      <span>RBI Cyber Security Guidelines Compliant</span>
+      <span>•</span>
+      <a href="javascript:void(0)" onclick="alert('For login issues, contact Branch IT Helpdesk at ext. 4040 or soc.fraud@bank.internal')">Helpdesk Support</a>
+    </div>
   </footer>
 
   <script>
@@ -627,26 +734,26 @@
       const btnTogglePwd = document.getElementById("btnTogglePassword");
       const pwdEyeIcon = document.getElementById("pwdEyeIcon");
 
-      // Check if already authenticated
+      // Check existing session
       const existingSession = localStorage.getItem("fraud_staff_session");
       if (existingSession) {
         try {
           const parsed = JSON.parse(existingSession);
-          if (parsed && parsed.full_name) {
-            usernameInput.value = parsed.username || "";
+          if (parsed && parsed.username) {
+            usernameInput.value = parsed.username;
           }
         } catch (e) {}
       }
 
-      // Password Toggle
+      // Show/Hide Password
       btnTogglePwd.addEventListener("click", () => {
         const isPassword = passwordInput.type === "password";
         passwordInput.type = isPassword ? "text" : "password";
         pwdEyeIcon.className = isPassword ? "fa-regular fa-eye-slash" : "fa-regular fa-eye";
       });
 
-      // Quick Demo Buttons
-      document.querySelectorAll(".demo-user-btn").forEach(btn => {
+      // Quick Demo Click
+      document.querySelectorAll(".demo-chip").forEach(btn => {
         btn.addEventListener("click", () => {
           const u = btn.getAttribute("data-user");
           const p = btn.getAttribute("data-pass");
@@ -656,7 +763,7 @@
         });
       });
 
-      // Handle Submit
+      // Form Submit
       form.addEventListener("submit", (e) => {
         e.preventDefault();
         performLogin(usernameInput.value.trim(), passwordInput.value.trim());
@@ -664,7 +771,7 @@
 
       async function performLogin(username, password) {
         if (!username || !password) {
-          showAlert("Please enter your username and password.", "error");
+          showAlert("Please enter your employee username and password.", "error");
           return;
         }
 
@@ -681,10 +788,10 @@
           const data = await res.json();
 
           if (!res.ok || !data.success) {
-            throw new Error(data.detail || data.message || "Invalid officer credentials.");
+            throw new Error(data.detail || data.message || "Invalid employee credentials.");
           }
 
-          showAlert(`Welcome, ${data.user.full_name}! Redirecting to Fraud Portal...`, "success");
+          showAlert(`Authentication verified. Welcome, ${data.user.full_name}!`, "success");
           
           // Save session
           localStorage.setItem("fraud_staff_session", JSON.stringify(data.user));
@@ -692,10 +799,9 @@
             localStorage.setItem("fraud_staff_token", data.token);
           }
 
-          // Redirect to main portal after brief visual feedback
           setTimeout(() => {
             window.location.href = "/";
-          }, 500);
+          }, 400);
 
         } catch (err) {
           showAlert(err.message, "error");
@@ -717,7 +823,7 @@
       function setLoading(isLoading) {
         btnSubmit.disabled = isLoading;
         if (isLoading) {
-          btnText.textContent = "Authenticating Officer...";
+          btnText.textContent = "Verifying Credentials...";
           btnIcon.className = "spinner";
         } else {
           btnText.textContent = "Sign In to Dashboard";
