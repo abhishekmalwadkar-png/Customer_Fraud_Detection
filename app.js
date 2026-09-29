@@ -1530,14 +1530,24 @@ window.openIncidentDossier = async function(ticketId) {
     const isBlocked = (ticket.account_status === 'FROZEN' || ticket.account_status === 'BLOCKED' || ticket.status === 'FROZEN' || ticket.status === 'BLOCKED');
     const btnFreeze = document.getElementById("btnDrawerFreeze");
     const alertBlocked = document.getElementById("drawerBlockedAlert");
-    if (btnFreeze) btnFreeze.style.display = isBlocked ? "none" : "block";
+    if (btnFreeze) {
+      btnFreeze.style.display = "block";
+      btnFreeze.innerHTML = isBlocked 
+        ? `<i class="fa-solid fa-lock"></i> Re-Trigger T4 Block Workflow` 
+        : `<i class="fa-solid fa-lock"></i> Temporarily Block Customer Account`;
+    }
     if (alertBlocked) alertBlocked.style.display = isBlocked ? "block" : "none";
 
     // Check if ticket is already resolved
     const isResolved = (ticket.status === 'RESOLVED' || ticket.status === 'CLOSED');
     const btnResolve = document.getElementById("btnDrawerResolve");
     const alertResolved = document.getElementById("drawerResolvedAlert");
-    if (btnResolve) btnResolve.style.display = isResolved ? "none" : "block";
+    if (btnResolve) {
+      btnResolve.style.display = "inline-flex";
+      btnResolve.innerHTML = isResolved
+        ? `<i class="fa-solid fa-circle-check"></i> Re-Trigger T4 Resolve`
+        : `<i class="fa-solid fa-circle-check"></i> Mark as Solved / Refunded`;
+    }
     if (alertResolved) alertResolved.style.display = isResolved ? "block" : "none";
 
     document.getElementById("drawerOverlay").classList.add("open");
@@ -1553,18 +1563,12 @@ async function handleFreezeAction() {
   const ticketNum = currentDossierTicket.ticket_number;
   const ticketId = currentDossierTicket.ticket_id;
 
-  // Optimistically update in-memory state right away
-  currentDossierTicket.status = "FROZEN";
-  currentDossierTicket.account_status = "FROZEN";
-  allTickets.forEach(t => {
-    if (String(t.ticket_id) === String(ticketId) || t.ticket_number === ticketNum) {
-      t.status = "FROZEN";
-      t.account_status = "FROZEN";
-    }
-  });
-  applyFilters();
-  renderHomeUrgentList();
-  document.getElementById("drawerOverlay").classList.remove("open");
+  const btnFreeze = document.getElementById("btnDrawerFreeze");
+  if (btnFreeze) {
+    btnFreeze.disabled = true;
+    btnFreeze.innerHTML = `<div class="spinner" style="width: 14px; height: 14px; border-width: 2px;"></div> Dispatching T4 Workflow...`;
+  }
+  showToast(`Dispatching 'BlockBankAccount' workflow to AutomationEdge T4 for account ${accNum}...`, "info");
 
   try {
     const res = await fetch("/api/workflow/block-account", {
@@ -1579,11 +1583,29 @@ async function handleFreezeAction() {
         ? `⚡ Account ${accNum} blocked! T4 AutomationEdge 'BlockBankAccount' triggered (Req #${reqId})` 
         : `⚡ Account ${accNum} blocked! AutomationEdge 'BlockBankAccount' workflow dispatched.`;
       showToast(msg, "warning");
+      
+      currentDossierTicket.status = "FROZEN";
+      currentDossierTicket.account_status = "FROZEN";
+      allTickets.forEach(t => {
+        if (String(t.ticket_id) === String(ticketId) || t.ticket_number === ticketNum) {
+          t.status = "FROZEN";
+          t.account_status = "FROZEN";
+        }
+      });
+      applyFilters();
+      renderHomeUrgentList();
       loadAllData();
+      document.getElementById("drawerOverlay").classList.remove("open");
+    } else {
+      showToast("Error: " + (data.message || data.detail || "Workflow failed to trigger"), "error");
     }
   } catch (err) {
     showToast("Could not block account: " + err.message, "error");
-    loadAllData();
+  } finally {
+    if (btnFreeze) {
+      btnFreeze.disabled = false;
+      btnFreeze.innerHTML = `<i class="fa-solid fa-lock"></i> Temporarily Block Customer Account`;
+    }
   }
 }
 
@@ -1591,23 +1613,11 @@ async function handleStatusUpdate(newStatus) {
   if (!currentDossierTicket) return;
   const ticketId = currentDossierTicket.ticket_id;
   const ticketNum = currentDossierTicket.ticket_number;
+  const accNum = currentDossierTicket.account_number || "";
 
-  // Optimistically update in-memory state right away
-  currentDossierTicket.status = newStatus;
-  allTickets.forEach(t => {
-    if (String(t.ticket_id) === String(ticketId) || t.ticket_number === ticketNum) {
-      t.status = newStatus;
-      if (newStatus === "RESOLVED") {
-        t.recovered_amount = t.amount_involved;
-      }
-      if (newStatus === "FROZEN") {
-        t.account_status = "FROZEN";
-      }
-    }
-  });
-  applyFilters();
-  renderHomeUrgentList();
-  document.getElementById("drawerOverlay").classList.remove("open");
+  if (newStatus === "RESOLVED") {
+    showToast(`Dispatching 'ResolveFraudTicket' workflow to AutomationEdge T4 for ticket ${ticketNum}...`, "info");
+  }
 
   try {
     let res;
@@ -1618,7 +1628,7 @@ async function handleStatusUpdate(newStatus) {
         body: JSON.stringify({
           ticket_id: ticketId,
           ticket_number: ticketNum,
-          account_number: currentDossierTicket?.account_number || "",
+          account_number: accNum,
           action_taken: `Dispute verified and resolved. Refund credited back to customer on ${new Date().toLocaleDateString()}`
         })
       });
@@ -1639,12 +1649,29 @@ async function handleStatusUpdate(newStatus) {
       const aeWorkflowNote = (newStatus === 'RESOLVED' && reqId) 
         ? ` (T4 AutomationEdge 'ResolveFraudTicket' triggered - Req #${reqId})` 
         : (newStatus === 'RESOLVED' ? " (T4 AutomationEdge 'ResolveFraudTicket' dispatched)" : "");
-      showToast(`Complaint ${currentDossierTicket.ticket_number} updated to "${friendlyStatus}"${aeWorkflowNote}`, "success");
+      showToast(`Complaint ${ticketNum} updated to "${friendlyStatus}"${aeWorkflowNote}`, "success");
+      
+      currentDossierTicket.status = newStatus;
+      if (newStatus === "RESOLVED") {
+        currentDossierTicket.recovered_amount = currentDossierTicket.amount_involved;
+      }
+      allTickets.forEach(t => {
+        if (String(t.ticket_id) === String(ticketId) || t.ticket_number === ticketNum) {
+          t.status = newStatus;
+          if (newStatus === "RESOLVED") {
+            t.recovered_amount = t.amount_involved;
+          }
+        }
+      });
+      applyFilters();
+      renderHomeUrgentList();
       loadAllData();
+      document.getElementById("drawerOverlay").classList.remove("open");
+    } else {
+      showToast("Error updating status: " + (data.message || data.detail || "Failed"), "error");
     }
   } catch (err) {
     showToast("Could not update status: " + err.message, "error");
-    loadAllData();
   }
 }
 
