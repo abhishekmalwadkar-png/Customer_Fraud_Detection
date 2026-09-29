@@ -12,6 +12,7 @@ import json
 import uuid
 import asyncio
 import logging
+import hashlib
 from decimal import Decimal
 from datetime import datetime, date, timezone
 from typing import Optional, Any, Dict, List, Union
@@ -372,6 +373,10 @@ class FreezeAccountSchema(BaseModel):
 class SqlExecuteSchema(BaseModel):
     query: str = Field(..., description="SQL Query string to execute against PostgreSQL", examples=["SELECT * FROM fraud_tickets LIMIT 5;"])
 
+class StaffLoginSchema(BaseModel):
+    username: str = Field(..., description="Staff username or email", examples=["investigator3"])
+    password: str = Field(..., description="Staff password", examples=["Password@123"])
+
 # -------------------------------------------------------------
 # Static Frontend Routes
 # -------------------------------------------------------------
@@ -455,33 +460,123 @@ def api_metrics():
     }
 
 # -------------------------------------------------------------
-# REST API Endpoints
+# Staff Authentication & Role-Based Access Control (RBAC)
 # -------------------------------------------------------------
-@app.get("/api/overview", tags=["Analytics & Overview"])
-def api_overview():
-    """Returns top-level metric counters for the Bank Fraud Operations Dashboard."""
+@app.post("/api/auth/login", tags=["Staff Authentication"])
+def api_staff_login(payload: StaffLoginSchema, request: Request):
+    """
+    Authenticate staff member (Manager or Investigator) against PostgreSQL staff_users.
+    Managers see all bank tickets; Investigators see only their assigned tickets.
+    """
     conn = get_db_connection()
     cursor = conn.cursor()
     try:
-        cursor.execute("SELECT COUNT(*) FROM fraud_tickets;")
+        uname = payload.username.strip()
+        pwd = payload.password.strip()
+        pwd_hash = hashlib.sha256(pwd.encode('utf-8')).hexdigest()
+
+        cursor.execute("""
+            SELECT user_id, username, full_name, role, email, department, is_active 
+            FROM staff_users 
+            WHERE (LOWER(username) = LOWER(%s) OR LOWER(email) = LOWER(%s))
+              AND (password_plain = %s OR password_hash = %s);
+        """, (uname, uname, pwd, pwd_hash))
+        row = cursor.fetchone()
+        
+        if not row:
+            raise HTTPException(status_code=401, detail="Invalid username or password.")
+        
+        user_id, username, full_name, role, email, dept, is_active = row
+        if not is_active:
+            raise HTTPException(status_code=403, detail="Staff account has been deactivated.")
+
+        token = f"STF_SESS_{uuid.uuid4().hex}"
+        return {
+            "success": True,
+            "token": token,
+            "user": {
+                "user_id": user_id,
+                "username": username,
+                "full_name": full_name,
+                "role": role,
+                "email": email,
+                "department": dept
+            },
+            "message": f"Welcome, {full_name} ({role}). Logged in successfully."
+        }
+    finally:
+        cursor.close()
+        conn.close()
+
+@app.get("/api/auth/users", tags=["Staff Authentication"])
+def api_get_staff_users():
+    """Returns list of active staff users for quick login / demo user switching."""
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    try:
+        cursor.execute("""
+            SELECT user_id, username, full_name, role, email, department, password_plain 
+            FROM staff_users 
+            WHERE is_active = TRUE 
+            ORDER BY CASE WHEN role = 'MANAGER' THEN 1 ELSE 2 END, user_id ASC;
+        """)
+        users = []
+        for r in cursor.fetchall():
+            users.append({
+                "user_id": r[0],
+                "username": r[1],
+                "full_name": r[2],
+                "role": r[3],
+                "email": r[4],
+                "department": r[5],
+                "demo_password": r[6]
+            })
+        return clean_db_record(users)
+    finally:
+        cursor.close()
+        conn.close()
+
+# -------------------------------------------------------------
+# REST API Endpoints
+# -------------------------------------------------------------
+@app.get("/api/overview", tags=["Analytics & Overview"])
+def api_overview(request: Request):
+    """
+    Returns top-level metric counters for the Bank Fraud Operations Dashboard.
+    If logged in as INVESTIGATOR, scopes metrics to their assigned cases; If MANAGER, shows all bank data.
+    """
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    try:
+        staff_role = request.headers.get("X-User-Role") or request.query_params.get("user_role") or "MANAGER"
+        staff_name = request.headers.get("X-Staff-User") or request.headers.get("X-User-Name") or request.query_params.get("staff_user")
+
+        filter_sql = ""
+        params = []
+        if staff_role.upper() == "INVESTIGATOR" and staff_name and staff_name.upper() != "ALL":
+            filter_sql = "WHERE assigned_investigator ILIKE %s"
+            params = [f"%{staff_name.strip()}%"]
+
+        cursor.execute(f"SELECT COUNT(*) FROM fraud_tickets {filter_sql};", tuple(params))
         total_tickets = cursor.fetchone()[0]
 
-        cursor.execute("SELECT COALESCE(SUM(amount_involved), 0) FROM fraud_tickets;")
+        cursor.execute(f"SELECT COALESCE(SUM(amount_involved), 0) FROM fraud_tickets {filter_sql};", tuple(params))
         total_amount = cursor.fetchone()[0]
 
-        cursor.execute("SELECT COALESCE(SUM(recovered_amount), 0) FROM fraud_tickets;")
+        cursor.execute(f"SELECT COALESCE(SUM(recovered_amount), 0) FROM fraud_tickets {filter_sql};", tuple(params))
         recovered_amount = cursor.fetchone()[0]
 
-        cursor.execute("SELECT COUNT(*) FROM fraud_tickets WHERE status = 'UNDER_INVESTIGATION';")
+        where_and = f"{filter_sql} AND" if filter_sql else "WHERE"
+        cursor.execute(f"SELECT COUNT(*) FROM fraud_tickets {where_and} status = 'UNDER_INVESTIGATION';", tuple(params))
         under_investigation = cursor.fetchone()[0]
 
-        cursor.execute("SELECT COUNT(*) FROM fraud_tickets WHERE status = 'FROZEN';")
+        cursor.execute(f"SELECT COUNT(*) FROM fraud_tickets {where_and} status = 'FROZEN';", tuple(params))
         frozen_accounts = cursor.fetchone()[0]
 
-        cursor.execute("SELECT COUNT(*) FROM fraud_tickets WHERE status = 'RESOLVED';")
+        cursor.execute(f"SELECT COUNT(*) FROM fraud_tickets {where_and} status = 'RESOLVED';", tuple(params))
         resolved_cases = cursor.fetchone()[0]
 
-        cursor.execute("SELECT COUNT(*) FROM fraud_tickets WHERE status NOT IN ('RESOLVED', 'CLOSED', 'REJECTED');")
+        cursor.execute(f"SELECT COUNT(*) FROM fraud_tickets {where_and} status NOT IN ('RESOLVED', 'CLOSED', 'REJECTED');", tuple(params))
         active_tickets = cursor.fetchone()[0]
 
         cursor.execute("SELECT COUNT(*) FROM customers WHERE risk_tier = 'CRITICAL';")
@@ -499,7 +594,9 @@ def api_overview():
             "frozen_accounts": frozen_accounts,
             "resolved_cases": resolved_cases,
             "critical_customers": critical_customers,
-            "total_customers": total_customers
+            "total_customers": total_customers,
+            "view_scope": "INVESTIGATOR_MY_TICKETS" if staff_role.upper() == "INVESTIGATOR" else "MANAGER_ALL_TICKETS",
+            "active_staff": staff_name or "All Staff"
         })
     finally:
         cursor.close()
@@ -507,6 +604,7 @@ def api_overview():
 
 @app.get("/api/fraud-tickets", tags=["Fraud Operations"])
 def api_get_fraud_tickets(
+    request: Request,
     page: Optional[int] = None,
     page_size: Optional[int] = None,
     q: Optional[str] = None,
@@ -516,12 +614,26 @@ def api_get_fraud_tickets(
     date_from: Optional[str] = None,
     date_to: Optional[str] = None
 ):
-    """List recorded fraud incidents with optional FTS search, filtering, and server-side pagination."""
+    """
+    List recorded fraud incidents with optional FTS search, filtering, and server-side pagination.
+    Investigators see only tickets assigned to them; Managers see all tickets.
+    """
     conn = get_db_connection()
     cursor = conn.cursor()
     try:
         where_clauses = []
         params = []
+
+        staff_role = request.headers.get("X-User-Role") or request.query_params.get("user_role") or "MANAGER"
+        staff_name = request.headers.get("X-Staff-User") or request.headers.get("X-User-Name") or request.query_params.get("staff_user")
+
+        # Role-based restriction: Investigators only see their own tickets
+        if staff_role.upper() == "INVESTIGATOR" and staff_name and staff_name.upper() != "ALL":
+            where_clauses.append("t.assigned_investigator ILIKE %s")
+            params.append(f"%{staff_name.strip()}%")
+        elif assigned_to and assigned_to.strip() and assigned_to != "ALL":
+            where_clauses.append("t.assigned_investigator = %s")
+            params.append(assigned_to.strip())
 
         if q and q.strip():
             where_clauses.append("t.tsv_search @@ plainto_tsquery('english', %s)")
@@ -534,10 +646,6 @@ def api_get_fraud_tickets(
         if severity and severity.strip() and severity.upper() != "ALL":
             where_clauses.append("t.severity = %s")
             params.append(severity.strip().upper())
-            
-        if assigned_to and assigned_to.strip() and assigned_to != "ALL":
-            where_clauses.append("t.assigned_investigator = %s")
-            params.append(assigned_to.strip())
 
         if date_from and date_from.strip():
             where_clauses.append("t.incident_date >= %s")
@@ -587,6 +695,7 @@ def api_get_fraud_tickets(
             {order_sql}
             {limit_sql};
         """
+
         cursor.execute(sql, tuple(query_params))
         rows = cursor.fetchall()
         

@@ -42,11 +42,39 @@
         <span>Report New Fraud</span>
       </button>
 
-      <div class="user-profile-badge">
-        <div class="avatar-circle">SD</div>
-        <div class="user-meta">
-          <span class="user-name">Shreya Deshmukh</span>
-          <span class="user-role">Senior Branch Officer</span>
+      <!-- Staff Profile & Role Switcher -->
+      <div class="user-profile-wrapper" id="userProfileWrapper">
+        <div class="user-profile-badge" id="btnUserProfile" title="Click to switch staff user or login" tabindex="0">
+          <div class="avatar-circle" id="userAvatar">VM</div>
+          <div class="user-meta">
+            <span class="user-name" id="userFullName">Vikram Malhotra</span>
+            <span class="user-role" id="userRoleBadge"><i class="fa-solid fa-crown" style="color: #f59e0b;"></i> Fraud Manager (All Tickets)</span>
+          </div>
+          <i class="fa-solid fa-chevron-down profile-chevron"></i>
+        </div>
+
+        <!-- Staff Dropdown Menu -->
+        <div class="user-dropdown-menu" id="userDropdownMenu" style="display: none;">
+          <div class="user-dropdown-header">
+            <div class="user-dropdown-avatar" id="dropdownAvatar">VM</div>
+            <div class="user-dropdown-info">
+              <div class="user-dropdown-title" id="dropdownStaffTitle">Vikram Malhotra</div>
+              <div class="user-dropdown-subtitle" id="dropdownStaffRole">👑 Fraud Manager • Full Bank Access</div>
+            </div>
+          </div>
+          <div class="user-dropdown-divider"></div>
+          <div class="user-dropdown-section-title">
+            <i class="fa-solid fa-users"></i>
+            <span>SWITCH LOGGED-IN STAFF (5 ACCOUNTS)</span>
+          </div>
+          <div class="staff-quick-switch-list" id="staffQuickSwitchList">
+            <!-- Dynamically populated from /api/auth/users -->
+          </div>
+          <div class="user-dropdown-footer">
+            <button class="btn-dropdown-action" id="btnOpenLoginModal">
+              <i class="fa-solid fa-right-to-bracket"></i> Custom Staff Login
+            </button>
+          </div>
         </div>
       </div>
 
@@ -1169,9 +1197,53 @@
     </div>
   </div>
 
+  <!-- Staff Login & Authentication Modal -->
+  <div class="modal-overlay" id="modalStaffLogin" style="display: none;">
+    <div class="modal-card modal-login-card">
+      <div class="modal-header login-header">
+        <div class="login-brand">
+          <div class="logo-shield"><i class="fa-solid fa-user-shield"></i></div>
+          <div>
+            <h3>Staff Authentication</h3>
+            <p>Apex Trust Bank • Role-Based Security Portal</p>
+          </div>
+        </div>
+        <button class="modal-close-btn" id="btnCloseLoginModal">&times;</button>
+      </div>
+      <form id="formStaffLogin">
+        <div class="modal-body">
+          <div class="login-role-notice">
+            <i class="fa-solid fa-circle-info"></i>
+            <span><strong>Role-Based Access:</strong> Investigators see <em>only</em> tickets assigned to them. Managers have full visibility across all bank tickets.</span>
+          </div>
+          <div class="form-group full-span">
+            <label>Username or Staff Email</label>
+            <input type="text" id="loginUsername" required placeholder="e.g. manager or investigator3">
+          </div>
+          <div class="form-group full-span">
+            <label>Password</label>
+            <input type="password" id="loginPassword" required placeholder="Enter password (default: Password@123)">
+          </div>
+          <div class="login-presets-wrap">
+            <label style="font-size: 11px; font-weight: 700; color: var(--text-muted); text-transform: uppercase;">1-Click Demo Login (5 Staff Accounts):</label>
+            <div class="login-preset-chips" id="loginPresetChips">
+              <!-- Dynamically rendered -->
+            </div>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-outline" id="btnCancelLoginModal">Cancel</button>
+          <button type="submit" class="btn btn-primary" id="btnSubmitLogin">
+            <i class="fa-solid fa-right-to-bracket"></i> Sign In to Portal
+          </button>
+        </div>
+      </form>
+    </div>
+  </div>
+
   <!-- Toast Notification Container -->
   <div class="toast-container" id="toastContainer"></div>
 
-  <script src="app.js?v=5.6"></script>
+  <script src="app.js?v=5.7"></script>
 </body>
 </html>
