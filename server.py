@@ -409,6 +409,13 @@ class StaffLoginSchema(BaseModel):
 # -------------------------------------------------------------
 # Static Frontend Routes
 # -------------------------------------------------------------
+@app.get("/login", include_in_schema=False)
+@app.get("/login.html", include_in_schema=False)
+async def serve_login():
+    if os.path.exists("login.html"):
+        return FileResponse("login.html", media_type="text/html")
+    return HTMLResponse("<h2>Login Page Under Construction</h2>", status_code=200)
+
 @app.get("/", include_in_schema=False)
 async def serve_index():
     if os.path.exists("index.html"):
@@ -426,6 +433,95 @@ async def serve_js():
     if os.path.exists("app.js"):
         return FileResponse("app.js", media_type="application/javascript")
     raise HTTPException(status_code=404, detail="app.js not found")
+
+# -------------------------------------------------------------
+# Staff Authentication Endpoints
+# -------------------------------------------------------------
+@app.post("/api/auth/login", tags=["Staff Authentication"])
+def api_staff_login(payload: StaffLoginSchema, request: Request):
+    """
+    Authenticate Banking Staff / Fraud Investigator.
+    Validates credentials against PostgreSQL 'staff_users' table.
+    """
+    u_input = payload.username.strip().lower()
+    p_input = payload.password.strip()
+    p_hash = hashlib.sha256(p_input.encode("utf-8")).hexdigest()
+
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    try:
+        cursor.execute("""
+            SELECT user_id, username, full_name, role, email, department, is_active, password_hash, password_plain
+            FROM staff_users
+            WHERE LOWER(username) = %s OR LOWER(email) = %s;
+        """, (u_input, u_input))
+        row = cursor.fetchone()
+        if not row:
+            raise HTTPException(status_code=401, detail="Invalid staff username or email.")
+
+        user_id, username, full_name, role, email, department, is_active, db_hash, db_plain = row
+
+        if not is_active:
+            raise HTTPException(status_code=403, detail="Staff account is deactivated. Contact Cyber Security Lead.")
+
+        # Check SHA-256 hash or fallback to plain password
+        if p_hash != db_hash and p_input != db_plain:
+            raise HTTPException(status_code=401, detail="Invalid staff password.")
+
+        token = f"stf_{uuid.uuid4().hex}"
+        client_ip = request.client.host if request.client else "127.0.0.1"
+
+        # Record login in audit log
+        cursor.execute("""
+            INSERT INTO audit_logs (ticket_number, actor, action, details, ip_address)
+            VALUES (%s, %s, %s, %s, %s);
+        """, ("STAFF_AUTH", full_name, "STAFF_LOGIN_SUCCESS", f"Staff user '{username}' ({role}) authenticated successfully.", client_ip))
+        conn.commit()
+
+        return {
+            "success": True,
+            "token": token,
+            "user": {
+                "user_id": user_id,
+                "username": username,
+                "full_name": full_name,
+                "role": role,
+                "email": email,
+                "department": department
+            },
+            "message": f"Welcome, {full_name}."
+        }
+    finally:
+        cursor.close()
+        conn.close()
+
+@app.get("/api/auth/staff-profiles", tags=["Staff Authentication"])
+def api_get_staff_profiles():
+    """Returns list of active staff profiles for quick demo login switcher."""
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    try:
+        cursor.execute("""
+            SELECT user_id, username, full_name, role, email, department
+            FROM staff_users
+            WHERE is_active = TRUE
+            ORDER BY user_id;
+        """)
+        rows = cursor.fetchall()
+        profiles = []
+        for r in rows:
+            profiles.append({
+                "user_id": r[0],
+                "username": r[1],
+                "full_name": r[2],
+                "role": r[3],
+                "email": r[4],
+                "department": r[5]
+            })
+        return profiles
+    finally:
+        cursor.close()
+        conn.close()
 
 # -------------------------------------------------------------
 # Health & Observability Endpoints

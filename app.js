@@ -19,7 +19,50 @@ let recentTxData = [];
 let selectedTicketIds = new Set();
 let currentDossierTicket = null;
 
+// Staff Authentication Session
+let currentStaffUser = null;
+function checkAuthSession() {
+  const sessionStr = localStorage.getItem("fraud_staff_session");
+  if (!sessionStr) {
+    window.location.href = "/login";
+    return false;
+  }
+  try {
+    currentStaffUser = JSON.parse(sessionStr);
+    if (!currentStaffUser || !currentStaffUser.full_name) {
+      window.location.href = "/login";
+      return false;
+    }
+  } catch (e) {
+    window.location.href = "/login";
+    return false;
+  }
+
+  // Update Header User Profile UI
+  const nameEl = document.getElementById("headerUserName");
+  const roleEl = document.getElementById("headerUserRole");
+  const avatarEl = document.getElementById("headerUserAvatar");
+  if (nameEl) nameEl.textContent = currentStaffUser.full_name;
+  if (roleEl) roleEl.textContent = currentStaffUser.role === "MANAGER" ? "Branch Manager (All Access)" : (currentStaffUser.department || "Fraud Investigator");
+  if (avatarEl) {
+    const parts = (currentStaffUser.full_name || "Staff").split(" ");
+    const initials = parts.length > 1 ? (parts[0][0] + parts[1][0]).toUpperCase() : parts[0].slice(0, 2).toUpperCase();
+    avatarEl.textContent = initials;
+  }
+  return true;
+}
+
+function handleStaffLogout() {
+  if (confirm("Sign out from the Apex Trust Bank Fraud Portal?")) {
+    localStorage.removeItem("fraud_staff_session");
+    localStorage.removeItem("fraud_staff_token");
+    window.location.href = "/login";
+  }
+}
+
 document.addEventListener("DOMContentLoaded", () => {
+  if (!checkAuthSession()) return;
+
   initTabs();
   initClock();
   initEventListeners();
@@ -187,6 +230,9 @@ function initEventListeners() {
   drawerOverlay.addEventListener("click", (e) => {
     if (e.target === drawerOverlay) drawerOverlay.classList.remove("open");
   });
+
+  // Header Logout Button
+  document.getElementById("btnLogoutHeader")?.addEventListener("click", handleStaffLogout);
 
   // Drawer Emergency Actions & Staff Reassignment
   document.getElementById("btnDrawerFreeze").addEventListener("click", handleFreezeAction);

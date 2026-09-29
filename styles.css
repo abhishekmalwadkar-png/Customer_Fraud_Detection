@@ -3331,3 +3331,42 @@ body.bank-portal-theme {
   border-color: #d97706;
   color: #ffffff;
 }
+
+/* Header Profile Badge & Logout Action */
+.user-profile-badge {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 5px 12px 5px 6px;
+  background: rgba(241, 245, 249, 0.85);
+  border: 1px solid #e2e8f0;
+  border-radius: 24px;
+  transition: all 0.2s ease;
+}
+
+.user-profile-badge:hover {
+  background: #ffffff;
+  border-color: #cbd5e1;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.04);
+}
+
+.btn-logout-header {
+  background: transparent;
+  border: none;
+  color: #94a3b8;
+  cursor: pointer;
+  padding: 6px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 13px;
+  transition: all 0.2s ease;
+  margin-left: 2px;
+}
+
+.btn-logout-header:hover {
+  background: #fee2e2;
+  color: #ef4444;
+  transform: translateX(1px);
+}

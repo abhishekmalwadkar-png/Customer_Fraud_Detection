@@ -8,7 +8,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=JetBrains+Mono:wght@500;600&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="styles.css?v=6.0">
+  <link rel="stylesheet" href="styles.css?v=7.0">
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
 </head>
 <body class="bank-portal-theme">
@@ -42,13 +42,16 @@
         <span>Report New Fraud</span>
       </button>
 
-      <!-- User Profile Badge -->
-      <div class="user-profile-badge" title="Customer Support & Fraud Operations">
-        <div class="avatar-circle">VM</div>
+      <!-- User Profile Badge & Logout -->
+      <div class="user-profile-badge" id="headerUserProfileBadge" title="Signed in staff member">
+        <div class="avatar-circle" id="headerUserAvatar">VM</div>
         <div class="user-meta">
-          <span class="user-name">Vikram Malhotra</span>
-          <span class="user-role">Fraud Operations</span>
+          <span class="user-name" id="headerUserName">Vikram Malhotra</span>
+          <span class="user-role" id="headerUserRole">Fraud Operations</span>
         </div>
+        <button class="btn-logout-header" id="btnLogoutHeader" title="Sign Out from Staff Portal" aria-label="Sign Out">
+          <i class="fa-solid fa-arrow-right-from-bracket"></i>
+        </button>
       </div>
 
       <!-- Notification Bell at Far Top-Right -->
@@ -1179,6 +1182,6 @@
   <!-- Toast Notification Container -->
   <div class="toast-container" id="toastContainer"></div>
 
-  <script src="app.js?v=12.0"></script>
+  <script src="app.js?v=13.0"></script>
 </body>
 </html>
