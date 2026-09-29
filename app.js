@@ -1380,7 +1380,10 @@ async function executeBulkAction(newStatus, actionNote) {
 
     const data = await res.json();
     if (data.success) {
-      showToast(`Successfully updated ${data.updated_count} complaints to "${friendlyStatus}"`, "success");
+      const wfNote = data.dispatched_workflows > 0 
+        ? ` (⚡ Dispatched ${data.dispatched_workflows} T4 AutomationEdge RPA workflows)` 
+        : "";
+      showToast(`Successfully updated ${data.updated_count} complaint(s) to "${friendlyStatus}"${wfNote}`, "success");
       loadAllData();
     } else {
       showToast("Bulk action failed: " + (data.error || data.detail || "Unknown error"), "error");

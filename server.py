@@ -2400,7 +2400,10 @@ async def api_resolve_ticket(
 
 @app.post("/api/fraud-tickets/bulk-update", tags=["Fraud Operations"])
 async def api_bulk_update_tickets(payload: BulkTicketUpdateSchema, request: Request):
-    """Bulk update status or assigned staff across multiple selected tickets."""
+    """
+    Bulk update status or assigned staff across multiple selected tickets.
+    Immediately commits DB state and concurrently dispatches AutomationEdge RPA workflows.
+    """
     if not payload.ticket_ids:
         raise HTTPException(status_code=400, detail="No ticket IDs provided")
 
@@ -2434,24 +2437,6 @@ async def api_bulk_update_tickets(payload: BulkTicketUpdateSchema, request: Requ
             if cust_ids:
                 cursor.execute("UPDATE customer_accounts SET status = 'FROZEN' WHERE customer_id = ANY(%s);", (cust_ids,))
 
-            # Dispatch AutomationEdge BlockBankAccount for each frozen ticket
-            for r in rows:
-                t_num = r[0]
-                acc_num = r[2] or ""
-                await trigger_automationedge_workflow(AE_WORKFLOW_FREEZE_ACCOUNT, {
-                    "ticket_number": t_num or "",
-                    "account_number": acc_num or ""
-                })
-        elif status_val == "RESOLVED":
-            # Dispatch AutomationEdge ResolveFraudTicket for each resolved ticket
-            for r in rows:
-                t_num = r[0]
-                acc_num = r[2] or ""
-                await trigger_automationedge_workflow(AE_WORKFLOW_RESOLVE_TICKET, {
-                    "ticket_number": t_num or "",
-                    "account_number": acc_num or ""
-                })
-
         client_ip = request.client.host if request.client else "127.0.0.1"
         actor = request.headers.get("X-User-Name") or DEFAULT_INVESTIGATOR
         for r in rows:
@@ -2462,11 +2447,49 @@ async def api_bulk_update_tickets(payload: BulkTicketUpdateSchema, request: Requ
             """, (t_num, actor, f"BULK_UPDATE_{status_val or 'STAFF_ASSIGN'}", action_note, client_ip))
 
         conn.commit()
-
-        return {"success": True, "updated_count": updated_count}
     finally:
         cursor.close()
         conn.close()
+
+    # 2. Concurrently dispatch AutomationEdge workflows outside DB lock
+    dispatched_req_ids = []
+    if status_val == "FROZEN":
+        tasks = []
+        for r in rows:
+            t_num = r[0] or ""
+            acc_num = r[2] or ""
+            tasks.append(trigger_automationedge_workflow(AE_WORKFLOW_FREEZE_ACCOUNT, {
+                "ticket_number": t_num,
+                "account_number": acc_num
+            }))
+        if tasks:
+            results = await asyncio.gather(*tasks, return_exceptions=True)
+            for res in results:
+                if isinstance(res, dict) and res.get("automation_request_id"):
+                    dispatched_req_ids.append(res["automation_request_id"])
+
+    elif status_val == "RESOLVED":
+        tasks = []
+        for r in rows:
+            t_num = r[0] or ""
+            acc_num = r[2] or ""
+            tasks.append(trigger_automationedge_workflow(AE_WORKFLOW_RESOLVE_TICKET, {
+                "ticket_number": t_num,
+                "account_number": acc_num
+            }))
+        if tasks:
+            results = await asyncio.gather(*tasks, return_exceptions=True)
+            for res in results:
+                if isinstance(res, dict) and res.get("automation_request_id"):
+                    dispatched_req_ids.append(res["automation_request_id"])
+
+    return {
+        "success": True, 
+        "updated_count": updated_count,
+        "dispatched_workflows": len(dispatched_req_ids),
+        "automation_request_ids": dispatched_req_ids,
+        "message": f"Bulk update completed for {updated_count} complaints. {len(dispatched_req_ids)} T4 workflows dispatched."
+    }
 
 @app.api_route("/api/freeze-account", methods=["GET", "POST"], tags=["Account Actions"])
 async def api_freeze_account(request: Request):
@@ -2584,6 +2607,116 @@ async def api_freeze_account(request: Request):
             "status": "FROZEN",
             "authenticated_customer": auth_customer["username"] if auth_customer else None,
             "message": f"Bank account {acc_num} locked in database. (Any already resolved tickets remain in history as RESOLVED)."
+        }
+    except Exception as exc:
+        conn.rollback()
+        raise exc
+    finally:
+        cursor.close()
+        conn.close()
+
+@app.api_route("/api/resolve-ticket", methods=["GET", "POST"], tags=["Account Actions"])
+@app.api_route("/api/resolve-complaint", methods=["GET", "POST"], tags=["Account Actions"])
+async def api_resolve_ticket_direct(request: Request):
+    """
+    Direct resolution endpoint called by AutomationEdge 'ResolveFraudTicket' workflow.
+    Resolves linked fraud tickets and marks recovered amount in PostgreSQL.
+    (Does NOT trigger AutomationEdge workflow to prevent recursive execution loops).
+    """
+    import re
+    acc_num = None
+    ticket_num = None
+    note = "Dispute verified and resolved via AutomationEdge RPA. Refund processed."
+
+    # 1. Query parameters
+    acc_num = request.query_params.get("account_number") or request.query_params.get("account_no") or request.query_params.get("account")
+    ticket_num = request.query_params.get("ticket_number") or request.query_params.get("ticket_no")
+    note = request.query_params.get("action_taken") or request.query_params.get("note") or request.query_params.get("notes") or note
+
+    # 2. Body inspection
+    try:
+        raw_bytes = await request.body()
+        if raw_bytes:
+            raw_str = raw_bytes.decode("utf-8", errors="ignore").strip()
+            
+            # Try JSON
+            if raw_str.startswith(("{", "[")):
+                try:
+                    body_json = json.loads(raw_str)
+                    if isinstance(body_json, dict):
+                        acc_num = acc_num or body_json.get("account_number") or body_json.get("account_no") or body_json.get("acc_num") or body_json.get("account")
+                        ticket_num = ticket_num or body_json.get("ticket_number") or body_json.get("ticket_no")
+                        note = body_json.get("action_taken") or body_json.get("notes") or body_json.get("note") or note
+                except Exception:
+                    pass
+            
+            # Try form data
+            if ("=" in raw_str):
+                try:
+                    form = await request.form()
+                    acc_num = acc_num or form.get("account_number") or form.get("account_no") or form.get("account")
+                    ticket_num = ticket_num or form.get("ticket_number") or form.get("ticket_no")
+                    note = form.get("action_taken") or form.get("notes") or form.get("note") or note
+                except Exception:
+                    pass
+
+            # Regex fallback
+            if not ticket_num:
+                t_match = re.search(r'FRD-[\w-]+', raw_str, re.IGNORECASE)
+                if t_match:
+                    ticket_num = t_match.group(0).upper()
+            if not acc_num:
+                match = re.search(r'ACT-[\w-]+', raw_str, re.IGNORECASE)
+                if match:
+                    acc_num = match.group(0).upper()
+    except Exception as e:
+        logger.warning(f"Error parsing resolve-ticket body: {e}")
+
+    conn = get_db_connection()
+    conn.autocommit = True
+    cursor = conn.cursor()
+    try:
+        updated_tickets = []
+        if ticket_num:
+            cursor.execute("""
+                UPDATE fraud_tickets 
+                SET status = 'RESOLVED',
+                    recovered_amount = amount_involved,
+                    action_taken = %s,
+                    updated_at = CURRENT_TIMESTAMP
+                WHERE (ticket_number = %s OR ticket_number ILIKE %s)
+                RETURNING ticket_number, account_number;
+            """, (note, ticket_num, f"%{ticket_num}%"))
+            updated_tickets = cursor.fetchall()
+        elif acc_num:
+            cursor.execute("""
+                UPDATE fraud_tickets 
+                SET status = 'RESOLVED',
+                    recovered_amount = amount_involved,
+                    action_taken = %s,
+                    updated_at = CURRENT_TIMESTAMP
+                WHERE (account_number = %s OR account_number ILIKE %s)
+                RETURNING ticket_number, account_number;
+            """, (note, acc_num, f"%{acc_num}%"))
+            updated_tickets = cursor.fetchall()
+
+        client_ip = request.client.host if request.client else "127.0.0.1"
+        actor = request.headers.get("X-User-Name") or "AutomationEdge / Core Banking"
+        for row in updated_tickets:
+            cursor.execute("""
+                INSERT INTO audit_logs (ticket_number, customer_name, actor, action, details, ip_address)
+                VALUES (%s, %s, %s, %s, %s, %s);
+            """, (row[0], "Customer", actor, "TICKET_RESOLVED_RPA", f"Ticket {row[0]} marked RESOLVED by AutomationEdge RPA: {note}", client_ip))
+
+        conn.commit()
+
+        return {
+            "success": True,
+            "ticket_number": ticket_num,
+            "account_number": acc_num,
+            "status": "RESOLVED",
+            "updated_tickets_count": len(updated_tickets),
+            "message": f"Fraud ticket(s) resolved successfully in core database by AutomationEdge."
         }
     except Exception as exc:
         conn.rollback()
