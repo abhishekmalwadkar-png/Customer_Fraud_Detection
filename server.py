@@ -821,6 +821,51 @@ def api_get_single_ticket(ticket_id: str):
         cursor.close()
         conn.close()
 
+def determine_fraud_severity(incident_type: str, amount: float = 0.0, user_severity: Optional[str] = None) -> str:
+    """
+    Intelligently computes fraud severity (CRITICAL, HIGH, MEDIUM, LOW)
+    based on the specific fraud incident type and financial exposure.
+    """
+    inc_lower = (incident_type or "").lower().strip()
+
+    # 1. Critical High-Threat Vector Fraud Types
+    critical_keywords = [
+        "sim swap", "sim card swap", "otp", "credential theft", 
+        "account takeover", "extortion", "crypto", "cloning", 
+        "international card", "account lockout"
+    ]
+    if any(k in inc_lower for k in critical_keywords):
+        return "CRITICAL"
+
+    # 2. High-Severity Operational Fraud Types
+    high_keywords = [
+        "unauthorized bank transfer", "unauthorized transfer", "unauthorized atm",
+        "impersonation", "fake kyc", "voice call", "call scam", "cheque deposit",
+        "altered cheque", "investment"
+    ]
+    if any(k in inc_lower for k in high_keywords):
+        return "HIGH"
+
+    # 3. Medium-Severity Phishing & QR Code Scams
+    medium_keywords = [
+        "fake qr", "qr code", "phishing", "fake email", "fake bill",
+        "loan approval", "lottery", "cashback"
+    ]
+    if any(k in inc_lower for k in medium_keywords):
+        return "MEDIUM"
+
+    # 4. Financial Threshold Override Rules
+    if amount >= 100000.0:
+        return "CRITICAL"
+    elif amount >= 50000.0:
+        return "HIGH"
+    elif amount >= 10000.0:
+        return "MEDIUM"
+    elif user_severity and str(user_severity).strip().upper() in ["CRITICAL", "HIGH", "MEDIUM", "LOW"]:
+        return str(user_severity).strip().upper()
+
+    return "LOW"
+
 def _sync_insert_single_ticket(payload: Dict[str, Any], client_ip: str) -> Dict[str, Any]:
     """Synchronous thread-safe database insertion routine for a single fraud ticket with Idempotency Key support."""
     def _get_val(*keys, default=None):
@@ -860,17 +905,11 @@ def _sync_insert_single_ticket(payload: Dict[str, Any], client_ip: str) -> Dict[
     except ValueError:
         raise ValueError(f"Invalid numerical amount_involved: '{raw_amount}'")
 
-    if amount >= 100000.0:
-        severity = "CRITICAL"
-    elif amount >= 50000.0:
-        severity = "HIGH"
-    elif amount >= 10000.0:
-        severity = "MEDIUM"
-    else:
-        severity = "LOW"
+    incident_type = str(_get_val("incident_type", "incidenttype", "fraud_type", default=DEFAULT_INCIDENT_TYPE)).strip()
+    raw_user_sev = _get_val("severity", default=None)
+    severity = determine_fraud_severity(incident_type, amount, raw_user_sev)
     risk_tier = severity
 
-    incident_type = str(_get_val("incident_type", "incidenttype", "fraud_type", default=DEFAULT_INCIDENT_TYPE)).strip()
     channel = str(_get_val("reported_channel", "channel", default=DEFAULT_CHANNEL)).strip()
     desc = str(_get_val("description", "desc", "details", default=f"Suspicious activity reported via {channel}.")).strip()
     suspect = str(_get_val("suspect_entity", "suspect", "merchant", default="Flagged Merchant / Beneficiary")).strip()
@@ -1084,14 +1123,7 @@ def _sync_bulk_dummy_intake(target_count: int, client_ip: str) -> List[Dict[str,
             suspect = random.choice(merchants)
             staff_assignee = random.choice(staff_list)
             
-            if amount >= 75000.0:
-                severity = "CRITICAL"
-            elif amount >= 40000.0:
-                severity = "HIGH"
-            elif amount >= 15000.0:
-                severity = "MEDIUM"
-            else:
-                severity = "LOW"
+            severity = determine_fraud_severity(incident_type, amount)
             risk_tier = severity
 
             cust_code = f"CUST-{uuid.uuid4().hex[:6].upper()}"
