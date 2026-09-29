@@ -58,14 +58,14 @@ function checkAuthSession() {
   }
 
   if (heroWelcomeEl) heroWelcomeEl.textContent = `Welcome, ${fullName}`;
-  if (heroSubtitleEl) heroSubtitleEl.textContent = `${roleName} • Apex Trust Bank Fraud Prevention & Operations Hub`;
+  if (heroSubtitleEl) heroSubtitleEl.textContent = `${roleName} • Dummy Bank Portal Fraud Prevention & Operations Hub`;
   if (heroRoleEl) heroRoleEl.textContent = roleName;
 
   return true;
 }
 
 function handleStaffLogout() {
-  if (confirm("Sign out from the Apex Trust Bank Fraud Portal?")) {
+  if (confirm("Sign out from the Dummy Bank Portal?")) {
     localStorage.removeItem("fraud_staff_session");
     localStorage.removeItem("fraud_staff_token");
     window.location.href = "/login";
