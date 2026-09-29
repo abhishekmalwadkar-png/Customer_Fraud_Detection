@@ -1166,6 +1166,18 @@ function updateBulkToolbar() {
   if (bar) {
     if (count > 0) {
       bar.style.display = "flex";
+      
+      // Check if any selected tickets are not yet blocked
+      const selectedTickets = allTickets.filter(t => selectedTicketIds.has(String(t.ticket_id)));
+      const unblockedCount = selectedTickets.filter(t => t.status !== 'FROZEN' && t.status !== 'BLOCKED' && t.account_status !== 'FROZEN' && t.account_status !== 'BLOCKED').length;
+      const btnBulkFreeze = document.getElementById("btnBulkFreeze");
+      if (btnBulkFreeze) {
+        if (unblockedCount === 0) {
+          btnBulkFreeze.style.display = "none";
+        } else {
+          btnBulkFreeze.style.display = "inline-flex";
+        }
+      }
     } else {
       bar.style.display = "none";
     }
@@ -1355,6 +1367,13 @@ window.openIncidentDossier = async function(ticketId) {
     } else {
       auditListEl.innerHTML = `<div style="font-size: 12px; color: var(--text-dim);">No prior audit history.</div>`;
     }
+
+    // Check if account/ticket is already blocked
+    const isBlocked = (ticket.account_status === 'FROZEN' || ticket.account_status === 'BLOCKED' || ticket.status === 'FROZEN' || ticket.status === 'BLOCKED');
+    const btnFreeze = document.getElementById("btnDrawerFreeze");
+    const alertBlocked = document.getElementById("drawerBlockedAlert");
+    if (btnFreeze) btnFreeze.style.display = isBlocked ? "none" : "block";
+    if (alertBlocked) alertBlocked.style.display = isBlocked ? "block" : "none";
 
     document.getElementById("drawerOverlay").classList.add("open");
   } catch (err) {

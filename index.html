@@ -1040,6 +1040,9 @@
         <div class="drawer-card">
           <div class="drawer-card-title"><i class="fa-solid fa-hand-holding-hand"></i> Quick Actions</div>
           <div class="action-buttons-stack">
+            <div id="drawerBlockedAlert" style="display: none; font-size: 12px; padding: 8px 12px; background: rgba(239, 68, 68, 0.12); border: 1px solid rgba(239, 68, 68, 0.3); color: #fca5a5; border-radius: 6px; text-align: center; font-weight: 500;">
+              <i class="fa-solid fa-lock"></i> Bank account is currently <strong>BLOCKED</strong>
+            </div>
             <button class="btn btn-danger btn-block" id="btnDrawerFreeze">
               <i class="fa-solid fa-lock"></i> Temporarily Block Customer Account
             </button>
@@ -1173,6 +1176,6 @@
   <!-- Toast Notification Container -->
   <div class="toast-container" id="toastContainer"></div>
 
-  <script src="app.js?v=9.0"></script>
+  <script src="app.js?v=10.0"></script>
 </body>
 </html>
