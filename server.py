@@ -1568,6 +1568,104 @@ async def api_freeze_account(request: Request):
         cursor.close()
         conn.close()
 
+@app.api_route("/api/unfreeze-account", methods=["GET", "POST"], tags=["Account Actions"])
+async def api_unfreeze_account(request: Request):
+    """
+    Safely unfreeze/reactivate a customer account and record safety clearance.
+    Accepts JSON body, form-data, or URL query parameters via GET/POST.
+    """
+    import re
+    acc_num = request.query_params.get("account_number") or request.query_params.get("account_no") or request.query_params.get("account")
+    ticket_num = request.query_params.get("ticket_number") or request.query_params.get("ticket_no")
+    reason = request.query_params.get("reason") or "Dispute cleared and identity verified. Account reactivated."
+
+    if not acc_num:
+        try:
+            raw_bytes = await request.body()
+            if raw_bytes:
+                raw_str = raw_bytes.decode("utf-8", errors="ignore").strip()
+                if raw_str.startswith(("{", "[")):
+                    try:
+                        body_json = json.loads(raw_str)
+                        if isinstance(body_json, dict):
+                            acc_num = body_json.get("account_number") or body_json.get("account_no") or body_json.get("acc_num") or body_json.get("account")
+                            ticket_num = ticket_num or body_json.get("ticket_number") or body_json.get("ticket_no")
+                            reason = body_json.get("reason") or body_json.get("action_taken") or reason
+                    except Exception:
+                        pass
+                if not acc_num:
+                    match = re.search(r'ACT-[\w-]+', raw_str, re.IGNORECASE)
+                    if match:
+                        acc_num = match.group(0).upper()
+                    t_match = re.search(r'FRD-[\w-]+', raw_str, re.IGNORECASE)
+                    if t_match:
+                        ticket_num = t_match.group(0).upper()
+        except Exception:
+            pass
+
+    if not acc_num:
+        raise HTTPException(
+            status_code=400,
+            detail="Missing 'account_number'. In Process Studio, please link 'request_body' to the Body field in REST Client step, or pass ?account_number=ACT-XXXX."
+        )
+
+    acc_num = str(acc_num).strip()
+    if not acc_num.upper().startswith("ACT-") and not any(c.isalpha() for c in acc_num):
+        acc_num = f"ACT-{acc_num}"
+
+    ticket_num = str(ticket_num).strip() if ticket_num else None
+
+    conn = get_db_connection()
+    conn.autocommit = True
+    cursor = conn.cursor()
+    try:
+        # 1. Update customer account status back to ACTIVE
+        cursor.execute("UPDATE customer_accounts SET status = 'ACTIVE' WHERE account_number = %s OR account_number ILIKE %s RETURNING customer_id, balance;", (acc_num, f"%{acc_num}%"))
+        acc_res = cursor.fetchone()
+        
+        # 2. Get customer info for SMS/Email
+        cust_name = "Account Owner"
+        cust_email = "customer@bank.internal"
+        cust_phone = "+91 9876543210"
+        if acc_res:
+            c_id = acc_res[0]
+            cursor.execute("SELECT full_name, email, phone FROM customers WHERE customer_id = %s;", (c_id,))
+            c_row = cursor.fetchone()
+            if c_row:
+                cust_name, cust_email, cust_phone = c_row
+
+        client_ip = request.client.host if request.client else "127.0.0.1"
+        actor = request.headers.get("X-User-Name") or DEFAULT_INVESTIGATOR
+
+        # 3. Audit log entry
+        cursor.execute("""
+            INSERT INTO audit_logs (ticket_number, customer_name, actor, action, details, ip_address)
+            VALUES (%s, %s, %s, %s, %s, %s);
+        """, (ticket_num or "CLEARANCE", cust_name, actor, "ACCOUNT_UNFROZEN_ACTIVE", f"Account {acc_num} restored to ACTIVE status. Reason: {reason}", client_ip))
+
+        conn.commit()
+
+        # 4. Simulated SMS/Email Notification payload
+        sms_alert = f"Dear {cust_name}, your Apex Trust Bank account {acc_num} has been successfully secured and reactivated. Net banking services are now restored."
+
+        return {
+            "success": True,
+            "account_number": acc_num,
+            "ticket_number": ticket_num,
+            "customer_name": cust_name,
+            "account_status": "ACTIVE",
+            "clearance_note": reason,
+            "sms_notification_sent": True,
+            "sms_text": sms_alert,
+            "message": f"Bank account {acc_num} successfully reactivated and restored to ACTIVE status."
+        }
+    except Exception as exc:
+        conn.rollback()
+        raise exc
+    finally:
+        cursor.close()
+        conn.close()
+
 @app.get("/api/ae/config", tags=["AutomationEdge RPA Integration"])
 def api_ae_config():
     """Returns the current AutomationEdge Server and Workflow configuration (without exposing password)."""
