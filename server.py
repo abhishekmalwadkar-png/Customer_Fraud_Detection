@@ -1345,9 +1345,13 @@ async def api_update_ticket(ticket_id: str, payload: FraudTicketUpdateSchema, re
 
         ticket_num, cust_id, acc_num, new_assigned, amt_inv, rec_amt = res
 
-        # If status was updated to FROZEN, freeze the account too
+        # If status was updated to FROZEN, freeze the account too and trigger AutomationEdge BlockBankAccount
         if status_val == "FROZEN":
             cursor.execute("UPDATE customer_accounts SET status = 'FROZEN' WHERE customer_id = %s OR account_number = %s;", (cust_id, acc_num))
+            await trigger_automationedge_workflow(AE_WORKFLOW_FREEZE_ACCOUNT, {
+                "ticket_number": ticket_num or "",
+                "account_number": acc_num or ""
+            })
 
         client_ip = request.client.host if request.client else "127.0.0.1"
         actor = request.headers.get("X-User-Name") or DEFAULT_INVESTIGATOR
@@ -1515,6 +1519,15 @@ async def api_bulk_update_tickets(payload: BulkTicketUpdateSchema, request: Requ
             cust_ids = [r[1] for r in rows if r[1]]
             if cust_ids:
                 cursor.execute("UPDATE customer_accounts SET status = 'FROZEN' WHERE customer_id = ANY(%s);", (cust_ids,))
+
+            # Dispatch AutomationEdge BlockBankAccount for each frozen ticket
+            for r in rows:
+                t_num = r[0]
+                acc_num = r[2] or ""
+                await trigger_automationedge_workflow(AE_WORKFLOW_FREEZE_ACCOUNT, {
+                    "ticket_number": t_num or "",
+                    "account_number": acc_num or ""
+                })
 
         client_ip = request.client.host if request.client else "127.0.0.1"
         actor = request.headers.get("X-User-Name") or DEFAULT_INVESTIGATOR
