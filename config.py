@@ -63,11 +63,12 @@ DEFAULT_SEVERITY = os.getenv("DEFAULT_SEVERITY", "HIGH")
 
 # AutomationEdge (AE) T4 Cloud Server RPA Configuration
 AE_SERVER_URL = os.getenv("AE_SERVER_URL", "https://t4.automationedge.com/aeengine").rstrip("/")
-AE_ORG_CODE = os.getenv("AE_ORG_CODE", "AE_POC_TEAM")
-AE_USERNAME = os.getenv("AE_USERNAME", "abhishek.malwatkar@valuedx.com")
-AE_PASSWORD = os.getenv("AE_PASSWORD", "Abhi@2002")
+AE_ORG_CODE = os.getenv("AE_ORG_CODE", "").strip()
+AE_USERNAME = os.getenv("AE_USERNAME", "").strip()
+AE_PASSWORD = os.getenv("AE_PASSWORD", "").strip()
 AE_WORKFLOW_RAISE_FRAUD = os.getenv("AE_WORKFLOW_RAISE_FRAUD", "WF_RAISE_FRAUD")
 AE_WORKFLOW_FREEZE_ACCOUNT = os.getenv("AE_WORKFLOW_FREEZE_ACCOUNT", "BlockBankAccount")
 AE_WORKFLOW_RESOLVE_TICKET = os.getenv("AE_WORKFLOW_RESOLVE_TICKET", "ResolveFraudTicket")
 AE_TRIGGER_ENABLED = os.getenv("AE_TRIGGER_ENABLED", "true").lower() in ("true", "1", "yes")
+
 
