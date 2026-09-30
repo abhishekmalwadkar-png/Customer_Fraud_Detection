@@ -289,28 +289,30 @@ function initEventListeners() {
 
   document.getElementById("btnExportTicketsCSV").addEventListener("click", exportTicketsCSV);
 
-  // Modal Open / Close
+  // Modal Open / Close (if present)
   const modal = document.getElementById("newTicketModal");
-  document.getElementById("btnOpenNewTicketModal").addEventListener("click", () => {
-    updatePresetPriority();
-    modal.classList.add("open");
-  });
-  document.getElementById("btnCloseModal").addEventListener("click", () => {
-    modal.classList.remove("open");
-  });
-  document.getElementById("btnCancelModal").addEventListener("click", () => {
-    modal.classList.remove("open");
-  });
+  if (modal) {
+    document.getElementById("btnOpenNewTicketModal")?.addEventListener("click", () => {
+      updatePresetPriority();
+      modal.classList.add("open");
+    });
+    document.getElementById("btnCloseModal")?.addEventListener("click", () => {
+      modal.classList.remove("open");
+    });
+    document.getElementById("btnCancelModal")?.addEventListener("click", () => {
+      modal.classList.remove("open");
+    });
 
-  // Modal Amount Real-time Priority Preset Listener
-  const formAmountInput = document.getElementById("formAmount");
-  if (formAmountInput) {
-    formAmountInput.addEventListener("input", updatePresetPriority);
-    formAmountInput.addEventListener("change", updatePresetPriority);
+    // Modal Amount Real-time Priority Preset Listener
+    const formAmountInput = document.getElementById("formAmount");
+    if (formAmountInput) {
+      formAmountInput.addEventListener("input", updatePresetPriority);
+      formAmountInput.addEventListener("change", updatePresetPriority);
+    }
+
+    // Modal Form Submit
+    document.getElementById("newFraudTicketForm")?.addEventListener("submit", handleCreateNewTicket);
   }
-
-  // Modal Form Submit
-  document.getElementById("newFraudTicketForm").addEventListener("submit", handleCreateNewTicket);
 
   // Drawer Close
   const drawerOverlay = document.getElementById("drawerOverlay");

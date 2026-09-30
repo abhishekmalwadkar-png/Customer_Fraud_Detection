@@ -37,11 +37,6 @@
         <span id="clockValue">--:--:--</span>
       </div>
 
-      <button class="btn btn-primary" id="btnOpenNewTicketModal">
-        <i class="fa-solid fa-plus-circle"></i>
-        <span>Report New Fraud</span>
-      </button>
-
       <!-- User Profile Badge & Logout -->
       <div class="user-profile-badge" id="headerUserProfileBadge" title="Signed in staff member">
         <div class="avatar-circle" id="headerUserAvatar">VM</div>
@@ -140,11 +135,7 @@
             <h1 class="home-hero-title" id="homeHeroWelcome">Welcome, Officer</h1>
             <p class="home-hero-subtitle" id="homeHeroSubtitle">Fraud Prevention & Operations Hub</p>
             <div class="home-hero-actions">
-              <button class="btn btn-primary" id="btnHomeNewComplaint">
-                <i class="fa-solid fa-plus"></i>
-                <span>Log New Complaint</span>
-              </button>
-              <button class="btn btn-home-outline" id="btnHomeViewQueue">
+              <button class="btn btn-primary" id="btnHomeViewQueue">
                 <i class="fa-solid fa-clipboard-check"></i>
                 <span>View Fraud Complaints</span>
               </button>
@@ -1084,101 +1075,6 @@
           </div>
         </div>
       </div>
-    </div>
-  </div>
-
-  <!-- Modal: Report New Fraud Incident -->
-  <div class="modal-overlay" id="newTicketModal">
-    <div class="modal-box">
-      <div class="modal-header">
-        <div class="modal-title">
-          <i class="fa-solid fa-circle-plus highlight-emerald"></i>
-          <span>Report a Customer Fraud Complaint</span>
-        </div>
-        <button class="btn-close-modal" id="btnCloseModal"><i class="fa-solid fa-xmark"></i></button>
-      </div>
-
-      <form id="newFraudTicketForm" class="modal-form">
-        <div class="form-grid">
-          <div class="form-group">
-            <label>Customer Full Name *</label>
-            <input type="text" id="formCustName" required placeholder="e.g. Ramesh Sharma">
-          </div>
-          <div class="form-group">
-            <label>Customer Email Address *</label>
-            <input type="email" id="formCustEmail" required placeholder="e.g. ramesh.sharma@example.com">
-          </div>
-          <div class="form-group">
-            <label>Phone Number</label>
-            <input type="text" id="formCustPhone" placeholder="e.g. +91 98765 43210">
-          </div>
-          <div class="form-group">
-            <label>Bank Account Number *</label>
-            <input type="text" id="formAccNum" required placeholder="e.g. ACT-9921-4400">
-          </div>
-          <div class="form-group">
-            <label>Account Type</label>
-            <select id="formAccType" class="form-select">
-              <option value="CHECKING">Current Account</option>
-              <option value="SAVINGS" selected>Savings Account</option>
-              <option value="BUSINESS">Business Account</option>
-              <option value="WEALTH_MANAGEMENT">Wealth Account</option>
-              <option value="CREDIT_CARD">Credit Card</option>
-            </select>
-          </div>
-          <div class="form-group">
-            <label>Type of Fraud / Scam *</label>
-            <select id="formIncidentType" class="form-select" required>
-              <option value="Unauthorized Bank Transfer">Unauthorized Bank Transfer</option>
-              <option value="SIM Card Swap & Fake OTP Scam">SIM Card Swap & Fake OTP Scam</option>
-              <option value="Fake Email / Fake Bill Scam">Fake Email / Fake Bill Scam</option>
-              <option value="ATM / Card Cloning Scam">ATM / Card Cloning Scam</option>
-              <option value="Fake Voice Call Scam">Fake Voice Call Scam</option>
-              <option value="Online Crypto Wallet Theft">Online Crypto Wallet Theft</option>
-              <option value="Fake / Altered Cheque Deposit">Fake / Altered Cheque Deposit</option>
-              <option value="Fake QR Code Scam">Fake QR Code Scam</option>
-              <option value="Account Lockout / Extortion Attempt">Account Lockout / Extortion Attempt</option>
-            </select>
-          </div>
-          <div class="form-group">
-            <label>Reported Amount (INR ₹) *</label>
-            <input type="number" id="formAmount" required step="0.01" placeholder="e.g. 50000.00">
-          </div>
-          <div class="form-group">
-            <label>Priority Level <span style="font-size: 11px; color: var(--primary); font-weight: 600;">(Auto-Preset by Amount)</span></label>
-            <div id="formSeverityDisplay" class="preset-priority-box">
-              <span id="formSeverityBadge" class="tag-pill tag-low"><i class="fa-solid fa-circle-info"></i> Normal Priority (&lt; ₹10,000)</span>
-              <span class="preset-priority-hint"><i class="fa-solid fa-lock"></i> Auto-locked</span>
-            </div>
-            <input type="hidden" id="formSeverity" value="LOW">
-          </div>
-          <div class="form-group">
-            <label>Assign to Staff Officer</label>
-            <select id="formStaffAssignee" class="form-select">
-              <option value="Abhishek Malwadkar (High-Value Fraud Forensics)" selected>Abhishek Malwadkar (High-Value Fraud Forensics)</option>
-              <option value="Vikram Malhotra (Fraud Risk Management (All Access))">Vikram Malhotra (Fraud Risk Management)</option>
-              <option value="Pooja Bansal (Customer Helpdesk & Disputes)">Pooja Bansal (Customer Helpdesk & Disputes)</option>
-              <option value="SOC Fraud Operations Team (Cyber Fraud Operations)">SOC Fraud Operations Team (Cyber Fraud)</option>
-              <option value="Rahul Patil (Digital Banking Risk Cell)">Rahul Patil (Digital Banking Risk Cell)</option>
-            </select>
-          </div>
-          <div class="form-group full-span">
-            <label>Suspicious Person / Company / Account (if known)</label>
-            <input type="text" id="formSuspect" placeholder="e.g. Unknown UPI ID or website name">
-          </div>
-          <div class="form-group full-span">
-            <label>Complaint Details & Explanation *</label>
-            <textarea id="formDescription" required rows="3" placeholder="Explain what happened, date and time of the incident, and customer statement..."></textarea>
-          </div>
-        </div>
-
-        <div class="modal-footer">
-          <button type="button" class="btn btn-outline" id="btnCancelModal">Cancel</button>
-          <button type="submit" class="btn btn-primary" id="btnSubmitNewTicket">
-            <i class="fa-solid fa-check"></i> Submit Complaint
-          </button>
-        </div>
-      </form>
     </div>
   </div>
 
