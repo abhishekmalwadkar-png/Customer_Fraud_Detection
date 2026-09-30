@@ -458,7 +458,7 @@ function initEventListeners() {
   document.getElementById("btnBulkResolve")?.addEventListener("click", () => executeBulkAction("RESOLVED", "Bulk resolved and closed"));
   document.getElementById("btnBulkEscalate")?.addEventListener("click", () => executeBulkAction("ESCALATED", "Bulk escalated to Senior Team"));
   document.getElementById("btnBulkAssignStaff")?.addEventListener("click", () => {
-    const staff = document.getElementById("bulkStaffSelect")?.value || (allStaffMembers.length > 0 ? (allStaffMembers[0].department ? `${allStaffMembers[0].full_name} (${allStaffMembers[0].department})` : allStaffMembers[0].full_name) : "Abhishek Malwadkar (High-Value Fraud Forensics)");
+    const staff = document.getElementById("bulkStaffSelect")?.value || (allStaffMembers.length > 0 ? (allStaffMembers[0].department ? `${allStaffMembers[0].full_name} (${allStaffMembers[0].department})` : allStaffMembers[0].full_name) : "Staff Officer");
     executeBulkStaffAssign(staff);
   });
   document.getElementById("btnBulkExport")?.addEventListener("click", exportSelectedTicketsCSV);

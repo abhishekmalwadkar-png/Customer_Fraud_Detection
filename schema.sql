@@ -154,6 +154,37 @@ CREATE TABLE audit_logs (
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
+-- 7. Employees / Staff Users Master Table (Dynamic Staff Management)
+CREATE TABLE IF NOT EXISTS employees (
+    employee_id SERIAL PRIMARY KEY,
+    employee_code VARCHAR(30) UNIQUE NOT NULL,
+    username VARCHAR(50) UNIQUE NOT NULL,
+    password_hash VARCHAR(255) NOT NULL,
+    password_plain VARCHAR(100) NOT NULL,
+    full_name VARCHAR(100) NOT NULL,
+    role VARCHAR(30) NOT NULL DEFAULT 'INVESTIGATOR', -- MANAGER, INVESTIGATOR, ANALYST
+    email VARCHAR(100) NOT NULL,
+    phone VARCHAR(25),
+    department VARCHAR(100) DEFAULT 'Fraud Risk & Intelligence Unit',
+    designation VARCHAR(100) DEFAULT 'Fraud Investigator',
+    is_active BOOLEAN DEFAULT TRUE,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+-- Backward-compatible Staff Users View / Table
+CREATE TABLE IF NOT EXISTS staff_users (
+    user_id SERIAL PRIMARY KEY,
+    username VARCHAR(50) UNIQUE NOT NULL,
+    password_hash VARCHAR(255) NOT NULL,
+    password_plain VARCHAR(100) NOT NULL,
+    full_name VARCHAR(100) NOT NULL,
+    role VARCHAR(30) NOT NULL,
+    email VARCHAR(100) NOT NULL,
+    department VARCHAR(100) DEFAULT 'Fraud Risk & Intelligence Unit',
+    is_active BOOLEAN DEFAULT TRUE,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
 -- ==========================================================
 -- INDEXES FOR PERFORMANCE & FULL-TEXT SEARCH
 -- ==========================================================

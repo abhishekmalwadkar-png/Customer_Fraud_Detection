@@ -420,10 +420,20 @@ class CustomerLoginSchema(BaseModel):
 class AssignTicketSchema(BaseModel):
     ticket_number: Optional[str] = Field(None, description="Ticket number or ID to assign", examples=["FRD-2026-A1B2C3D4"])
     ticket_id: Optional[Union[int, str]] = Field(None, description="Ticket ID", examples=[101])
-    assigned_investigator: Optional[str] = Field(None, description="Staff member or username to assign", examples=["Abhishek Malwadkar (High-Value Fraud Forensics)"])
+    assigned_investigator: Optional[str] = Field(None, description="Staff member or username to assign", examples=["Vikram Malhotra (Fraud Risk Management (All Access))"])
     assigned_to: Optional[str] = Field(None, description="Alias for assigned_investigator", examples=["investigator3"])
-    staff_name: Optional[str] = Field(None, description="Alias for assigned_investigator", examples=["Abhishek Malwadkar"])
+    staff_name: Optional[str] = Field(None, description="Alias for assigned_investigator", examples=["Vikram Malhotra"])
     action_taken: Optional[str] = Field(None, description="Optional note for assignment audit log", examples=["Assigned to forensics team for investigation."])
+
+class EmployeeCreateSchema(BaseModel):
+    username: str = Field(..., description="Unique employee username for portal login", examples=["investigator5"])
+    password: str = Field(..., description="Employee login password", examples=["Password@123"])
+    full_name: str = Field(..., description="Full legal name of the employee", examples=["Sneha Kulkarni"])
+    email: str = Field(..., description="Official banking email address", examples=["sneha.k@bank.internal"])
+    role: Optional[str] = Field("INVESTIGATOR", description="Access role: MANAGER, INVESTIGATOR, ANALYST", examples=["INVESTIGATOR"])
+    department: Optional[str] = Field("Fraud Risk & Intelligence Unit", description="Assigned banking department", examples=["High-Value Fraud Forensics"])
+    designation: Optional[str] = Field("Fraud Investigator", description="Official job title / designation", examples=["Senior Forensics Analyst"])
+    phone: Optional[str] = Field(None, description="Contact phone number", examples=["+91 98200 55441"])
 
 # -------------------------------------------------------------
 # Static Frontend Routes
@@ -462,13 +472,14 @@ async def serve_js():
     raise HTTPException(status_code=404, detail="app.js not found")
 
 # -------------------------------------------------------------
-# Staff Authentication Endpoints
+# -------------------------------------------------------------
+# Staff & Employee Authentication & Dynamic Management Endpoints
 # -------------------------------------------------------------
 @app.post("/api/auth/login", tags=["Staff Authentication"])
 def api_staff_login(payload: StaffLoginSchema, request: Request):
     """
     Authenticate Banking Staff / Fraud Investigator.
-    Validates credentials against PostgreSQL 'staff_users' table.
+    Validates credentials dynamically against PostgreSQL 'employees' and 'staff_users' tables.
     """
     u_input = payload.username.strip().lower()
     p_input = payload.password.strip()
@@ -477,12 +488,23 @@ def api_staff_login(payload: StaffLoginSchema, request: Request):
     conn = get_db_connection()
     cursor = conn.cursor()
     try:
+        # Check in employees table
         cursor.execute("""
-            SELECT user_id, username, full_name, role, email, department, is_active, password_hash, password_plain
-            FROM staff_users
+            SELECT employee_id, username, full_name, role, email, department, is_active, password_hash, password_plain
+            FROM employees
             WHERE LOWER(username) = %s OR LOWER(email) = %s;
         """, (u_input, u_input))
         row = cursor.fetchone()
+        
+        if not row:
+            # Fallback check in staff_users table
+            cursor.execute("""
+                SELECT user_id, username, full_name, role, email, department, is_active, password_hash, password_plain
+                FROM staff_users
+                WHERE LOWER(username) = %s OR LOWER(email) = %s;
+            """, (u_input, u_input))
+            row = cursor.fetchone()
+
         if not row:
             raise HTTPException(status_code=401, detail="Invalid staff username or email.")
 
@@ -524,17 +546,26 @@ def api_staff_login(payload: StaffLoginSchema, request: Request):
 
 @app.get("/api/auth/staff-profiles", tags=["Staff Authentication"])
 def api_get_staff_profiles():
-    """Returns list of active staff profiles for quick demo login switcher."""
+    """Returns list of active staff profiles for quick login switcher."""
     conn = get_db_connection()
     cursor = conn.cursor()
     try:
         cursor.execute("""
-            SELECT user_id, username, full_name, role, email, department
-            FROM staff_users
+            SELECT employee_id, username, full_name, role, email, department
+            FROM employees
             WHERE is_active = TRUE
-            ORDER BY user_id;
+            ORDER BY employee_id;
         """)
         rows = cursor.fetchall()
+        if not rows:
+            cursor.execute("""
+                SELECT user_id, username, full_name, role, email, department
+                FROM staff_users
+                WHERE is_active = TRUE
+                ORDER BY user_id;
+            """)
+            rows = cursor.fetchall()
+        
         profiles = []
         for r in rows:
             profiles.append({
@@ -550,31 +581,127 @@ def api_get_staff_profiles():
         cursor.close()
         conn.close()
 
+@app.get("/api/employees", tags=["Staff Authentication"])
 @app.get("/api/staff-users", tags=["Staff Authentication"])
-def api_get_staff_users():
-    """Returns list of active staff members from PostgreSQL staff_users table for assignment dropdowns."""
+def api_get_employees():
+    """
+    Returns list of active staff members dynamically from PostgreSQL employees table for assignment dropdowns.
+    Zero hardcoded values: dynamically stays 100% in sync with database records.
+    """
     conn = get_db_connection()
     cursor = conn.cursor()
     try:
         cursor.execute("""
-            SELECT user_id, username, full_name, role, email, department
-            FROM staff_users
+            SELECT employee_id, employee_code, username, full_name, role, email, department, designation
+            FROM employees
             WHERE is_active = TRUE
-            ORDER BY user_id;
+            ORDER BY employee_id;
         """)
         rows = cursor.fetchall()
+        if not rows:
+            cursor.execute("""
+                SELECT user_id, 'EMP-' || user_id, username, full_name, role, email, department, 'Fraud Investigator'
+                FROM staff_users
+                WHERE is_active = TRUE
+                ORDER BY user_id;
+            """)
+            rows = cursor.fetchall()
+
         return [
             {
+                "employee_id": r[0],
+                "employee_code": r[1],
                 "user_id": r[0],
-                "username": r[1],
-                "full_name": r[2],
-                "role": r[3],
-                "email": r[4],
-                "department": r[5],
-                "display_name": f"{r[2]} ({r[5]})" if r[5] else r[2]
+                "username": r[2],
+                "full_name": r[3],
+                "role": r[4],
+                "email": r[5],
+                "department": r[6],
+                "designation": r[7],
+                "display_name": f"{r[3]} ({r[6]})" if r[6] else r[3]
             }
             for r in rows
         ]
+    finally:
+        cursor.close()
+        conn.close()
+
+@app.post("/api/employees", status_code=201, tags=["Staff Authentication"])
+def api_create_employee(payload: EmployeeCreateSchema, request: Request):
+    """
+    Dynamically onboard a newly joined bank employee into PostgreSQL 'employees' and 'staff_users' tables.
+    The new employee immediately becomes available across all operations dropdowns and can log in right away.
+    """
+    u_name = payload.username.strip().lower()
+    p_plain = payload.password.strip()
+    p_hash = hashlib.sha256(p_plain.encode("utf-8")).hexdigest()
+    f_name = payload.full_name.strip()
+    role_val = (payload.role or "INVESTIGATOR").strip().upper()
+    dept_val = payload.department.strip() if payload.department else "Fraud Risk & Intelligence Unit"
+    desig_val = payload.designation.strip() if payload.designation else "Fraud Investigator"
+    email_val = payload.email.strip().lower()
+    phone_val = payload.phone.strip() if payload.phone else ""
+
+    conn = get_db_connection()
+    conn.autocommit = True
+    cursor = conn.cursor()
+    try:
+        # Check uniqueness
+        cursor.execute("SELECT employee_id FROM employees WHERE LOWER(username) = %s OR LOWER(email) = %s;", (u_name, email_val))
+        if cursor.fetchone():
+            raise HTTPException(status_code=400, detail=f"Employee with username '{u_name}' or email '{email_val}' already exists.")
+
+        # Generate unique employee code
+        cursor.execute("SELECT COALESCE(MAX(employee_id), 0) + 1 FROM employees;")
+        next_id = cursor.fetchone()[0]
+        emp_code = f"EMP-{next_id:04d}"
+
+        # 1. Insert into employees
+        cursor.execute("""
+            INSERT INTO employees (employee_code, username, password_hash, password_plain, full_name, role, email, phone, department, designation, is_active)
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, TRUE)
+            RETURNING employee_id, created_at;
+        """, (emp_code, u_name, p_hash, p_plain, f_name, role_val, email_val, phone_val, dept_val, desig_val))
+        emp_row = cursor.fetchone()
+        emp_id = emp_row[0]
+
+        # 2. Sync to staff_users table
+        cursor.execute("""
+            INSERT INTO staff_users (username, password_hash, password_plain, full_name, role, email, department, is_active)
+            VALUES (%s, %s, %s, %s, %s, %s, %s, TRUE)
+            ON CONFLICT (username) DO UPDATE SET
+                full_name = EXCLUDED.full_name,
+                role = EXCLUDED.role,
+                email = EXCLUDED.email,
+                department = EXCLUDED.department,
+                password_hash = EXCLUDED.password_hash,
+                password_plain = EXCLUDED.password_plain;
+        """, (u_name, p_hash, p_plain, f_name, role_val, email_val, dept_val))
+
+        # 3. Audit log
+        client_ip = request.client.host if request.client else "127.0.0.1"
+        cursor.execute("""
+            INSERT INTO audit_logs (ticket_number, customer_name, actor, action, details, ip_address)
+            VALUES (%s, %s, %s, %s, %s, %s);
+        """, ("STAFF_ONBOARDING", f_name, "SYSTEM_HR", "EMPLOYEE_JOINED", f"New employee '{f_name}' ({emp_code}, {dept_val}) added to PostgreSQL database.", client_ip))
+
+        conn.commit()
+        return {
+            "success": True,
+            "employee_id": emp_id,
+            "employee_code": emp_code,
+            "username": u_name,
+            "full_name": f_name,
+            "role": role_val,
+            "department": dept_val,
+            "designation": desig_val,
+            "email": email_val,
+            "display_name": f"{f_name} ({dept_val})",
+            "message": f"Employee {f_name} ({emp_code}) successfully onboarded and synchronized across the portal."
+        }
+    except Exception as exc:
+        conn.rollback()
+        raise exc
     finally:
         cursor.close()
         conn.close()
@@ -1897,19 +2024,15 @@ def _sync_bulk_dummy_intake(target_count: int, client_ip: str) -> List[Dict[str,
     cursor = conn.cursor()
 
     try:
-        # Load live active staff members from staff_users table
-        cursor.execute("SELECT full_name, department FROM staff_users WHERE is_active = TRUE ORDER BY user_id;")
+        # Load live active staff members dynamically from PostgreSQL employees table
+        cursor.execute("SELECT full_name, department FROM employees WHERE is_active = TRUE ORDER BY employee_id;")
         staff_rows = cursor.fetchall()
-        if staff_rows:
-            staff_list = [f"{r[0]} ({r[1]})" if r[1] else r[0] for r in staff_rows]
-        else:
-            staff_list = [
-                "Abhishek Malwadkar (High-Value Fraud Forensics)",
-                "Vikram Malhotra (Fraud Risk Management (All Access))",
-                "Pooja Bansal (Customer Helpdesk & Disputes)",
-                "SOC Fraud Operations Team (Cyber Fraud Operations)",
-                "Rahul Patil (Digital Banking Risk Cell)"
-            ]
+        if not staff_rows:
+            cursor.execute("SELECT full_name, department FROM staff_users WHERE is_active = TRUE ORDER BY user_id;")
+            staff_rows = cursor.fetchall()
+            
+        staff_list = [f"{r[0]} ({r[1]})" if r[1] else r[0] for r in staff_rows] if staff_rows else ["Fraud Operations Specialist"]
+        
         for i in range(1, target_count + 1):
             fname = random.choice(first_names)
             lname = random.choice(last_names)
@@ -2222,15 +2345,25 @@ async def api_assign_ticket(
     conn.autocommit = True
     cursor = conn.cursor()
     try:
-        # Resolve staff username or partial name against staff_users table
+        # Resolve staff username or partial name against employees table
         cursor.execute("""
             SELECT full_name, department, role, username
-            FROM staff_users
+            FROM employees
             WHERE is_active = TRUE
               AND (LOWER(username) = LOWER(%s) OR LOWER(full_name) = LOWER(%s) OR LOWER(full_name) ILIKE %s OR LOWER(email) = LOWER(%s))
             LIMIT 1;
         """, (new_staff_input, new_staff_input, f"%{new_staff_input.lower()}%", new_staff_input))
         staff_row = cursor.fetchone()
+        
+        if not staff_row:
+            cursor.execute("""
+                SELECT full_name, department, role, username
+                FROM staff_users
+                WHERE is_active = TRUE
+                  AND (LOWER(username) = LOWER(%s) OR LOWER(full_name) = LOWER(%s) OR LOWER(full_name) ILIKE %s OR LOWER(email) = LOWER(%s))
+                LIMIT 1;
+            """, (new_staff_input, new_staff_input, f"%{new_staff_input.lower()}%", new_staff_input))
+            staff_row = cursor.fetchone()
 
         if staff_row:
             s_fname, s_dept, s_role, s_uname = staff_row
