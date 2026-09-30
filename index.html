@@ -87,33 +87,33 @@
     <aside class="portal-sidebar">
       <div class="nav-section-title">BANK PORTAL MENU</div>
       <nav class="portal-nav" id="mainNavigation">
-        <button class="nav-tab active" data-tab="tab-home" id="navTabHome">
+        <button class="nav-tab active" data-tab="tab-home" id="navTabHome" onclick="switchTab('tab-home')">
           <i class="fa-solid fa-house"></i>
           <span>Home</span>
         </button>
-        <button class="nav-tab" data-tab="tab-fraud-tickets" id="navTabFraudTickets">
+        <button class="nav-tab" data-tab="tab-fraud-tickets" id="navTabFraudTickets" onclick="switchTab('tab-fraud-tickets')">
           <i class="fa-solid fa-clipboard-check"></i>
           <span>Fraud Complaints</span>
           <span class="nav-badge" id="badgeTicketCount">0</span>
         </button>
-        <button class="nav-tab" data-tab="tab-dashboard" id="navTabDashboard">
+        <button class="nav-tab" data-tab="tab-dashboard" id="navTabDashboard" onclick="switchTab('tab-dashboard')">
           <i class="fa-solid fa-chart-pie"></i>
           <span>Summary</span>
         </button>
-        <button class="nav-tab" data-tab="tab-customers" id="navTabCustomers">
+        <button class="nav-tab" data-tab="tab-customers" id="navTabCustomers" onclick="switchTab('tab-customers')">
           <i class="fa-solid fa-users"></i>
           <span>Customer Directory</span>
         </button>
-        <button class="nav-tab" data-tab="tab-transactions" id="navTabTransactions">
+        <button class="nav-tab" data-tab="tab-transactions" id="navTabTransactions" onclick="switchTab('tab-transactions')">
           <i class="fa-solid fa-receipt"></i>
           <span>Recent Transactions</span>
           <span class="nav-badge alert-badge" id="badgeFlaggedTxn">Live</span>
         </button>
-        <button class="nav-tab" data-tab="tab-analytics" id="navTabAnalytics">
+        <button class="nav-tab" data-tab="tab-analytics" id="navTabAnalytics" onclick="switchTab('tab-analytics')">
           <i class="fa-solid fa-chart-simple"></i>
           <span>Fraud Types & Help</span>
         </button>
-        <button class="nav-tab" data-tab="tab-audit" id="navTabAudit">
+        <button class="nav-tab" data-tab="tab-audit" id="navTabAudit" onclick="switchTab('tab-audit')">
           <i class="fa-solid fa-clock-rotate-left"></i>
           <span>Activity History</span>
         </button>
