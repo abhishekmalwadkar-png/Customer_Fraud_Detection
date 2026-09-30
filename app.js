@@ -1388,21 +1388,17 @@ async function executeBulkAction(newStatus, actionNote) {
   const ticketIdsToUpdate = Array.from(selectedTicketIds);
   const friendlyStatus = newStatus === 'RESOLVED' ? 'Solved / Refunded' : (newStatus === 'FROZEN' ? 'Account Blocked' : (newStatus === 'ESCALATED' ? 'Escalated' : 'In Progress'));
 
-  // Optimistically update in-memory state
-  allTickets.forEach(t => {
-    if (ticketIdsToUpdate.includes(String(t.ticket_id))) {
-      t.status = newStatus;
-      if (newStatus === "RESOLVED") {
-        t.recovered_amount = t.amount_involved;
+  // For non-workflow status updates (e.g. internal triage), update in-memory state immediately
+  if (newStatus !== "FROZEN" && newStatus !== "RESOLVED") {
+    allTickets.forEach(t => {
+      if (ticketIdsToUpdate.includes(String(t.ticket_id))) {
+        t.status = newStatus;
       }
-      if (newStatus === "FROZEN") {
-        t.account_status = "FROZEN";
-      }
-    }
-  });
+    });
+    applyFilters();
+    renderHomeUrgentList();
+  }
   clearSelectedTickets();
-  applyFilters();
-  renderHomeUrgentList();
 
   try {
     const res = await fetch("/api/fraud-tickets/bulk-update", {
@@ -1417,10 +1413,12 @@ async function executeBulkAction(newStatus, actionNote) {
 
     const data = await res.json();
     if (data.success) {
-      const wfNote = data.dispatched_workflows > 0 
-        ? ` (⚡ Dispatched ${data.dispatched_workflows} T4 AutomationEdge RPA workflows)` 
-        : "";
-      showToast(`Successfully updated ${data.updated_count} complaint(s) to "${friendlyStatus}"${wfNote}`, "success");
+      if (newStatus === "FROZEN" || newStatus === "RESOLVED") {
+        const wfCount = data.dispatched_workflows || count;
+        showToast(`⚡ Dispatched ${wfCount} T4 workflow(s) for ${friendlyStatus}. Records will reflect once T4 execution completes.`, "info");
+      } else {
+        showToast(`Successfully updated ${data.updated_count} complaint(s) to "${friendlyStatus}"`, "success");
+      }
       loadAllData();
     } else {
       showToast("Bulk action failed: " + (data.error || data.detail || "Unknown error"), "error");
@@ -1601,7 +1599,6 @@ async function handleFreezeAction() {
   if (!currentDossierTicket) return;
   const accNum = currentDossierTicket.account_number;
   const ticketNum = currentDossierTicket.ticket_number;
-  const ticketId = currentDossierTicket.ticket_id;
 
   const btnFreeze = document.getElementById("btnDrawerFreeze");
   if (btnFreeze) {
@@ -1620,22 +1617,13 @@ async function handleFreezeAction() {
     if (data.success) {
       const reqId = data.ae_integration?.automation_request_id || data.ae_integration?.response?.automationRequestId;
       const msg = reqId 
-        ? `⚡ Account ${accNum} blocked! T4 AutomationEdge 'BlockBankAccount' triggered (Req #${reqId})` 
-        : `⚡ Account ${accNum} blocked! AutomationEdge 'BlockBankAccount' workflow dispatched.`;
-      showToast(msg, "warning");
+        ? `⚡ Dispatched 'BlockBankAccount' workflow to T4 Server (Req #${reqId}). Account status will update to Blocked once T4 workflow execution completes.` 
+        : `⚡ Dispatched 'BlockBankAccount' workflow to AutomationEdge T4. Account status will update once T4 completes execution.`;
+      showToast(msg, "info");
       
-      currentDossierTicket.status = "FROZEN";
-      currentDossierTicket.account_status = "FROZEN";
-      allTickets.forEach(t => {
-        if (String(t.ticket_id) === String(ticketId) || t.ticket_number === ticketNum) {
-          t.status = "FROZEN";
-          t.account_status = "FROZEN";
-        }
-      });
-      applyFilters();
-      renderHomeUrgentList();
-      loadAllData();
+      // Close drawer and let 1.5s background polling reflect actual DB status once T4 finishes
       document.getElementById("drawerOverlay").classList.remove("open");
+      loadAllData();
     } else {
       showToast("Error: " + (data.message || data.detail || "Workflow failed to trigger"), "error");
     }
@@ -1686,25 +1674,24 @@ async function handleStatusUpdate(newStatus) {
     if (data.success) {
       const friendlyStatus = newStatus === 'RESOLVED' ? 'Solved / Refunded' : (newStatus === 'FROZEN' ? 'Account Blocked' : (newStatus === 'ESCALATED' ? 'Escalated' : 'In Progress'));
       const reqId = data.ae_integration?.automation_request_id || data.ae_integration?.response?.automationRequestId;
-      const aeWorkflowNote = (newStatus === 'RESOLVED' && reqId) 
-        ? ` (T4 AutomationEdge 'ResolveFraudTicket' triggered - Req #${reqId})` 
-        : (newStatus === 'RESOLVED' ? " (T4 AutomationEdge 'ResolveFraudTicket' dispatched)" : "");
-      showToast(`Complaint ${ticketNum} updated to "${friendlyStatus}"${aeWorkflowNote}`, "success");
-      
-      currentDossierTicket.status = newStatus;
+
       if (newStatus === "RESOLVED") {
-        currentDossierTicket.recovered_amount = currentDossierTicket.amount_involved;
-      }
-      allTickets.forEach(t => {
-        if (String(t.ticket_id) === String(ticketId) || t.ticket_number === ticketNum) {
-          t.status = newStatus;
-          if (newStatus === "RESOLVED") {
-            t.recovered_amount = t.amount_involved;
+        const msg = reqId
+          ? `⚡ Dispatched 'ResolveFraudTicket' workflow to T4 Server (Req #${reqId}). Ticket status will update to Solved once T4 workflow execution completes.`
+          : `⚡ Dispatched 'ResolveFraudTicket' workflow to T4 Server. Ticket status will update once T4 completes execution.`;
+        showToast(msg, "info");
+      } else {
+        showToast(`Complaint ${ticketNum} updated to "${friendlyStatus}"`, "success");
+        currentDossierTicket.status = newStatus;
+        allTickets.forEach(t => {
+          if (String(t.ticket_id) === String(ticketId) || t.ticket_number === ticketNum) {
+            t.status = newStatus;
           }
-        }
-      });
-      applyFilters();
-      renderHomeUrgentList();
+        });
+        applyFilters();
+        renderHomeUrgentList();
+      }
+
       loadAllData();
       document.getElementById("drawerOverlay").classList.remove("open");
     } else {

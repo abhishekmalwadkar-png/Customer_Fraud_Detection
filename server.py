@@ -2536,7 +2536,7 @@ async def api_resolve_ticket(
 async def api_bulk_update_tickets(payload: BulkTicketUpdateSchema, request: Request):
     """
     Bulk update status or assigned staff across multiple selected tickets.
-    Immediately commits DB state and concurrently dispatches AutomationEdge RPA workflows.
+    For FROZEN and RESOLVED, dispatches T4 AutomationEdge RPA workflows and waits for workflow completion.
     """
     if not payload.ticket_ids:
         raise HTTPException(status_code=400, detail="No ticket IDs provided")
@@ -2552,33 +2552,43 @@ async def api_bulk_update_tickets(payload: BulkTicketUpdateSchema, request: Requ
         int_ids = [int(i) for i in payload.ticket_ids if str(i).isdigit()]
         str_ids = [str(i) for i in payload.ticket_ids if not str(i).isdigit()]
 
+        client_ip = request.client.host if request.client else "127.0.0.1"
+        actor = request.headers.get("X-User-Name") or DEFAULT_INVESTIGATOR
+
+        # Retrieve target ticket records
         cursor.execute("""
-            UPDATE fraud_tickets
-            SET status = COALESCE(%s, status),
-                assigned_investigator = COALESCE(%s, assigned_investigator),
-                action_taken = CASE WHEN %s != '' THEN %s ELSE action_taken END,
-                recovered_amount = CASE WHEN %s = 'RESOLVED' THEN amount_involved ELSE recovered_amount END,
-                updated_at = CURRENT_TIMESTAMP
-            WHERE ticket_id = ANY(%s) OR ticket_number = ANY(%s)
-            RETURNING ticket_number, customer_id, account_number;
-        """, (status_val, assigned_val, action_note, action_note, status_val, int_ids or [-1], str_ids or ['__NONE__']))
-        
+            SELECT ticket_id, ticket_number, customer_id, account_number, status
+            FROM fraud_tickets
+            WHERE ticket_id = ANY(%s) OR ticket_number = ANY(%s);
+        """, (int_ids or [-1], str_ids or ['__NONE__']))
         rows = cursor.fetchall()
         updated_count = len(rows)
 
-        if status_val == "FROZEN":
-            cust_ids = [r[1] for r in rows if r[1]]
-            if cust_ids:
-                cursor.execute("UPDATE customer_accounts SET status = 'FROZEN' WHERE customer_id = ANY(%s);", (cust_ids,))
-
-        client_ip = request.client.host if request.client else "127.0.0.1"
-        actor = request.headers.get("X-User-Name") or DEFAULT_INVESTIGATOR
-        for r in rows:
-            t_num = r[0]
+        if status_val not in ("FROZEN", "RESOLVED"):
+            # Internal status triage or staff assignment: apply immediately to DB
             cursor.execute("""
-                INSERT INTO audit_logs (ticket_number, actor, action, details, ip_address)
-                VALUES (%s, %s, %s, %s, %s);
-            """, (t_num, actor, f"BULK_UPDATE_{status_val or 'STAFF_ASSIGN'}", action_note, client_ip))
+                UPDATE fraud_tickets
+                SET status = COALESCE(%s, status),
+                    assigned_investigator = COALESCE(%s, assigned_investigator),
+                    action_taken = CASE WHEN %s != '' THEN %s ELSE action_taken END,
+                    updated_at = CURRENT_TIMESTAMP
+                WHERE ticket_id = ANY(%s) OR ticket_number = ANY(%s);
+            """, (status_val, assigned_val, action_note, action_note, int_ids or [-1], str_ids or ['__NONE__']))
+
+            for r in rows:
+                t_num = r[1]
+                cursor.execute("""
+                    INSERT INTO audit_logs (ticket_number, actor, action, details, ip_address)
+                    VALUES (%s, %s, %s, %s, %s);
+                """, (t_num, actor, f"BULK_UPDATE_{status_val or 'STAFF_ASSIGN'}", action_note, client_ip))
+        else:
+            # FROZEN or RESOLVED: Log audit trail of T4 dispatch without premature DB state mutation
+            for r in rows:
+                t_num = r[1]
+                cursor.execute("""
+                    INSERT INTO audit_logs (ticket_number, actor, action, details, ip_address)
+                    VALUES (%s, %s, %s, %s, %s);
+                """, (t_num, actor, f"TRIGGER_AE_BULK_{status_val}", f"Dispatched T4 workflow for {status_val} (Awaiting T4 RPA completion)", client_ip))
 
         conn.commit()
     finally:
@@ -2590,8 +2600,8 @@ async def api_bulk_update_tickets(payload: BulkTicketUpdateSchema, request: Requ
     if status_val == "FROZEN":
         tasks = []
         for r in rows:
-            t_num = r[0] or ""
-            acc_num = r[2] or ""
+            t_num = r[1] or ""
+            acc_num = r[3] or ""
             tasks.append(trigger_automationedge_workflow(AE_WORKFLOW_FREEZE_ACCOUNT, {
                 "ticket_number": t_num,
                 "account_number": acc_num
@@ -2605,8 +2615,8 @@ async def api_bulk_update_tickets(payload: BulkTicketUpdateSchema, request: Requ
     elif status_val == "RESOLVED":
         tasks = []
         for r in rows:
-            t_num = r[0] or ""
-            acc_num = r[2] or ""
+            t_num = r[1] or ""
+            acc_num = r[3] or ""
             tasks.append(trigger_automationedge_workflow(AE_WORKFLOW_RESOLVE_TICKET, {
                 "ticket_number": t_num,
                 "account_number": acc_num
@@ -2617,12 +2627,14 @@ async def api_bulk_update_tickets(payload: BulkTicketUpdateSchema, request: Requ
                 if isinstance(res, dict) and res.get("automation_request_id"):
                     dispatched_req_ids.append(res["automation_request_id"])
 
+    msg = f"Bulk {status_val or 'update'} initiated for {updated_count} complaints. {len(dispatched_req_ids)} T4 workflows dispatched. Status will reflect upon T4 completion." if status_val in ("FROZEN", "RESOLVED") else f"Bulk update completed for {updated_count} complaints."
     return {
         "success": True, 
         "updated_count": updated_count,
+        "status": "QUEUED_ON_AE_SERVER" if status_val in ("FROZEN", "RESOLVED") else "UPDATED",
         "dispatched_workflows": len(dispatched_req_ids),
         "automation_request_ids": dispatched_req_ids,
-        "message": f"Bulk update completed for {updated_count} complaints. {len(dispatched_req_ids)} T4 workflows dispatched."
+        "message": msg
     }
 
 @app.api_route("/api/freeze-account", methods=["GET", "POST"], tags=["Account Actions"])
@@ -2863,7 +2875,7 @@ async def api_resolve_ticket_direct(request: Request):
 async def api_trigger_block_account_workflow(request: Request):
     """
     Explicit action: Dispatches AutomationEdge 'BlockBankAccount' workflow to T4 Cloud Server passing {ticket_number, account_number}.
-    Supports Customer Username & Password verification if provided.
+    Database and UI state are NOT marked FROZEN upfront; they update only once T4 workflow execution completes.
     """
     try:
         body = await request.json()
@@ -2886,24 +2898,15 @@ async def api_trigger_block_account_workflow(request: Request):
     if not acc_num and not ticket_num:
         raise HTTPException(status_code=400, detail="Missing account_number or ticket_number")
 
-    # 1. Update DB optimistically
+    # 1. Audit log the dispatch
     conn = get_db_connection()
     conn.autocommit = True
     cursor = conn.cursor()
     try:
-        if acc_num:
-            cursor.execute("UPDATE customer_accounts SET status = 'FROZEN' WHERE account_number = %s OR account_number ILIKE %s;", (acc_num, f"%{acc_num}%"))
-        if ticket_num:
-            cursor.execute("""
-                UPDATE fraud_tickets 
-                SET status = 'FROZEN', updated_at = CURRENT_TIMESTAMP 
-                WHERE (ticket_number = %s OR ticket_number ILIKE %s) 
-                  AND status NOT IN ('RESOLVED', 'CLOSED', 'REJECTED');
-            """, (ticket_num, f"%{ticket_num}%"))
-            cursor.execute("""
-                INSERT INTO audit_logs (ticket_number, customer_name, actor, action, details, ip_address)
-                VALUES (%s, %s, %s, %s, %s, %s);
-            """, (ticket_num, auth_customer["customer_name"] if auth_customer else "Account Owner", actor, "TRIGGER_AE_BLOCK_ACCOUNT", f"Dispatched T4 workflow '{AE_WORKFLOW_FREEZE_ACCOUNT}' for account {acc_num}", request.client.host if request.client else "127.0.0.1"))
+        cursor.execute("""
+            INSERT INTO audit_logs (ticket_number, customer_name, actor, action, details, ip_address)
+            VALUES (%s, %s, %s, %s, %s, %s);
+        """, (ticket_num or "MANUAL_DISPATCH", auth_customer["customer_name"] if auth_customer else "Account Owner", actor, "TRIGGER_AE_BLOCK_ACCOUNT", f"Dispatched T4 workflow '{AE_WORKFLOW_FREEZE_ACCOUNT}' for account {acc_num} (Awaiting T4 RPA completion)", request.client.host if request.client else "127.0.0.1"))
     finally:
         cursor.close()
         conn.close()
@@ -2920,16 +2923,17 @@ async def api_trigger_block_account_workflow(request: Request):
         "workflow": AE_WORKFLOW_FREEZE_ACCOUNT,
         "ticket_number": ticket_num,
         "account_number": acc_num,
+        "status": "QUEUED_ON_AE_SERVER",
         "authenticated_customer": auth_customer["username"] if auth_customer else None,
         "ae_integration": ae_dispatch,
-        "message": f"AutomationEdge workflow '{AE_WORKFLOW_FREEZE_ACCOUNT}' dispatched for ticket {ticket_num} (Account: {acc_num})."
+        "message": f"AutomationEdge workflow '{AE_WORKFLOW_FREEZE_ACCOUNT}' dispatched. Account will be blocked upon workflow completion."
     }
 
 @app.post("/api/workflow/resolve-ticket", tags=["Workflow Automation"])
 async def api_trigger_resolve_ticket_workflow(request: Request):
     """
     Explicit action: Dispatches AutomationEdge 'ResolveFraudTicket' workflow to T4 Cloud Server passing {ticket_number, account_number}.
-    Supports Customer Username & Password verification if provided.
+    Database and UI state are NOT marked RESOLVED upfront; they update only once T4 workflow execution completes.
     """
     try:
         body = await request.json()
@@ -2953,28 +2957,15 @@ async def api_trigger_resolve_ticket_workflow(request: Request):
     if not acc_num and not ticket_num:
         raise HTTPException(status_code=400, detail="Missing account_number or ticket_number")
 
-    # 1. Update DB optimistically
+    # 1. Audit log the dispatch
     conn = get_db_connection()
     conn.autocommit = True
     cursor = conn.cursor()
     try:
-        if ticket_num:
-            cursor.execute("""
-                UPDATE fraud_tickets 
-                SET status = 'RESOLVED', 
-                    recovered_amount = amount_involved,
-                    action_taken = %s,
-                    updated_at = CURRENT_TIMESTAMP 
-                WHERE (ticket_number = %s OR ticket_number ILIKE %s)
-                RETURNING account_number;
-            """, (note, ticket_num, f"%{ticket_num}%"))
-            ret = cursor.fetchone()
-            if ret and ret[0] and not acc_num:
-                acc_num = ret[0]
-            cursor.execute("""
-                INSERT INTO audit_logs (ticket_number, customer_name, actor, action, details, ip_address)
-                VALUES (%s, %s, %s, %s, %s, %s);
-            """, (ticket_num, auth_customer["customer_name"] if auth_customer else "Customer", actor, "STATUS_RESOLVED", f"Ticket marked RESOLVED via T4 workflow '{AE_WORKFLOW_RESOLVE_TICKET}'", request.client.host if request.client else "127.0.0.1"))
+        cursor.execute("""
+            INSERT INTO audit_logs (ticket_number, customer_name, actor, action, details, ip_address)
+            VALUES (%s, %s, %s, %s, %s, %s);
+        """, (ticket_num or "MANUAL_DISPATCH", auth_customer["customer_name"] if auth_customer else "Customer", actor, "TRIGGER_AE_RESOLVE_TICKET", f"Dispatched T4 workflow '{AE_WORKFLOW_RESOLVE_TICKET}' for ticket {ticket_num} (Awaiting T4 RPA completion)", request.client.host if request.client else "127.0.0.1"))
     finally:
         cursor.close()
         conn.close()
@@ -2990,9 +2981,9 @@ async def api_trigger_resolve_ticket_workflow(request: Request):
         "workflow": AE_WORKFLOW_RESOLVE_TICKET,
         "ticket_number": ticket_num,
         "account_number": acc_num,
-        "status": "RESOLVED",
+        "status": "QUEUED_ON_AE_SERVER",
         "ae_integration": ae_dispatch,
-        "message": f"AutomationEdge workflow '{AE_WORKFLOW_RESOLVE_TICKET}' dispatched for ticket {ticket_num} (Account: {acc_num})."
+        "message": f"AutomationEdge workflow '{AE_WORKFLOW_RESOLVE_TICKET}' dispatched. Ticket will be marked RESOLVED upon workflow completion."
     }
 
 @app.api_route("/api/unfreeze-account", methods=["GET", "POST"], tags=["Account Actions"])
