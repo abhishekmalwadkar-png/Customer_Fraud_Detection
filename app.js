@@ -649,24 +649,20 @@ function renderHomeUrgentList() {
   const container = document.getElementById("homeUrgentList");
   if (!container) return;
 
-  // Statuses where staff action has ALREADY been taken:
-  // Frozen/Blocked, Under Investigation, Escalated, Resolved, Closed, Rejected
-  const actionTakenStatuses = new Set([
-    'FROZEN',
-    'BLOCKED',
-    'UNDER_INVESTIGATION',
-    'ESCALATED',
+  // Statuses where case is fully finished / archived:
+  // Resolved, Closed, Rejected
+  const finishedStatuses = new Set([
     'RESOLVED',
     'CLOSED',
     'REJECTED'
   ]);
 
-  // Urgent Action Required list ONLY shows fresh/open complaints needing immediate action
+  // Urgent Action Required list shows active High/Critical complaints needing review & triage
   const urgentTickets = allTickets.filter(t => {
     const st = String(t.status || 'OPEN').trim().toUpperCase();
-    const needsAction = !actionTakenStatuses.has(st);
+    const isActive = !finishedStatuses.has(st);
     const isUrgent = t.severity === 'CRITICAL' || t.severity === 'HIGH';
-    return needsAction && isUrgent;
+    return isActive && isUrgent;
   });
 
   // Always render the status breakdown donut chart on the RIGHT side
