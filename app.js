@@ -83,14 +83,14 @@ function checkAuthSession() {
   }
 
   if (heroWelcomeEl) heroWelcomeEl.textContent = `Welcome, ${fullName}`;
-  if (heroSubtitleEl) heroSubtitleEl.textContent = `${roleName} • Dummy Bank Portal Operations Hub`;
+  if (heroSubtitleEl) heroSubtitleEl.textContent = `${roleName} • ABC Operations Hub`;
   if (heroRoleEl) heroRoleEl.textContent = roleName;
 
   return true;
 }
 
 function handleStaffLogout() {
-  if (confirm("Sign out from the Dummy Bank Portal?")) {
+  if (confirm("Sign out from ABC?")) {
     localStorage.removeItem("fraud_staff_session");
     localStorage.removeItem("fraud_staff_token");
     window.location.href = "/login";
@@ -290,8 +290,67 @@ function initClock() {
   setInterval(update, 1000);
 }
 
+// Sidebar Toggle & Collapse Controller
+function initSidebarToggle() {
+  const btnToggle = document.getElementById("btnSidebarToggle");
+  const btnClose = document.getElementById("btnSidebarClose");
+  const sidebar = document.getElementById("portalSidebar") || document.querySelector(".portal-sidebar");
+
+  if (!sidebar) return;
+
+  // Restore user's saved preference
+  const isSavedClosed = localStorage.getItem("abc_portal_sidebar_closed") === "true";
+  if (isSavedClosed) {
+    document.body.classList.add("sidebar-closed");
+    sidebar.classList.add("collapsed");
+  }
+
+  function toggleSidebar(forceState) {
+    const isCurrentlyClosed = document.body.classList.contains("sidebar-closed") || sidebar.classList.contains("collapsed");
+    const shouldClose = typeof forceState === "boolean" ? forceState : !isCurrentlyClosed;
+
+    if (shouldClose) {
+      document.body.classList.add("sidebar-closed");
+      sidebar.classList.add("collapsed");
+      localStorage.setItem("abc_portal_sidebar_closed", "true");
+    } else {
+      document.body.classList.remove("sidebar-closed");
+      sidebar.classList.remove("collapsed");
+      localStorage.setItem("abc_portal_sidebar_closed", "false");
+    }
+  }
+
+  if (btnToggle) {
+    btnToggle.addEventListener("click", (e) => {
+      e.stopPropagation();
+      toggleSidebar();
+    });
+  }
+
+  if (btnClose) {
+    btnClose.addEventListener("click", (e) => {
+      e.stopPropagation();
+      toggleSidebar(true);
+    });
+  }
+
+  // Keyboard shortcut: Ctrl + B or Cmd + B
+  document.addEventListener("keydown", (e) => {
+    if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "b") {
+      const activeEl = document.activeElement;
+      if (activeEl && (activeEl.tagName === "INPUT" || activeEl.tagName === "TEXTAREA")) {
+        return;
+      }
+      e.preventDefault();
+      toggleSidebar();
+    }
+  });
+}
+
 // 3. Event Listeners
 function initEventListeners() {
+  initSidebarToggle();
+
   // Search & Filter listeners
   const searchInput = document.getElementById("ticketSearchInput");
   const filterSeverity = document.getElementById("filterSeverity");
@@ -572,25 +631,30 @@ async function loadOverviewStats() {
     const activeTickets = data.active_tickets !== undefined ? data.active_tickets : Math.max(0, totalTickets - resolvedCases);
     const inProgressTickets = data.under_investigation || 0;
 
-    if (document.getElementById("kpiTotalCustomers")) document.getElementById("kpiTotalCustomers").textContent = data.total_customers || "0";
-    if (document.getElementById("kpiTotalTickets")) document.getElementById("kpiTotalTickets").textContent = totalTickets;
-    if (document.getElementById("badgeTicketCount")) document.getElementById("badgeTicketCount").textContent = totalTickets;
-    if (document.getElementById("kpiTotalAmount")) document.getElementById("kpiTotalAmount").textContent = formatCurrency(data.total_amount || 0);
-    if (document.getElementById("kpiRecoveredAmount")) document.getElementById("kpiRecoveredAmount").textContent = formatCurrency(data.recovered_amount || 0);
-    if (document.getElementById("kpiFrozenAccounts")) document.getElementById("kpiFrozenAccounts").textContent = data.frozen_accounts || "0";
-    if (document.getElementById("kpiCriticalCount")) document.getElementById("kpiCriticalCount").textContent = data.critical_customers || "0";
+    const setElText = (id, val) => {
+      const el = document.getElementById(id);
+      if (el && el.textContent !== String(val)) el.textContent = String(val);
+    };
+
+    setElText("kpiTotalCustomers", data.total_customers || "0");
+    setElText("kpiTotalTickets", totalTickets);
+    setElText("badgeTicketCount", activeTickets);
+    setElText("kpiTotalAmount", formatCurrency(data.total_amount || 0));
+    setElText("kpiRecoveredAmount", formatCurrency(data.recovered_amount || 0));
+    setElText("kpiFrozenAccounts", data.frozen_accounts || "0");
+    setElText("kpiCriticalCount", data.critical_customers || "0");
 
     // Active & In Progress ticket counts
-    if (document.getElementById("kpiActiveTickets")) document.getElementById("kpiActiveTickets").textContent = activeTickets;
-    if (document.getElementById("kpiInProgressTickets")) document.getElementById("kpiInProgressTickets").textContent = inProgressTickets;
-    if (document.getElementById("bubbleActiveTickets")) document.getElementById("bubbleActiveTickets").textContent = activeTickets;
-    if (document.getElementById("bubbleInProgressTickets")) document.getElementById("bubbleInProgressTickets").textContent = inProgressTickets;
+    setElText("kpiActiveTickets", activeTickets);
+    setElText("kpiInProgressTickets", inProgressTickets);
+    setElText("bubbleActiveTickets", activeTickets);
+    setElText("bubbleInProgressTickets", inProgressTickets);
 
     // Home Pulse Cards
-    if (document.getElementById("homeActiveTickets")) document.getElementById("homeActiveTickets").textContent = activeTickets;
-    if (document.getElementById("homeInProgressTickets")) document.getElementById("homeInProgressTickets").textContent = inProgressTickets;
-    if (document.getElementById("homeRecoveredAmount")) document.getElementById("homeRecoveredAmount").textContent = formatCurrency(data.recovered_amount || 0);
-    if (document.getElementById("homeSolvedTickets")) document.getElementById("homeSolvedTickets").textContent = resolvedCases;
+    setElText("homeActiveTickets", activeTickets);
+    setElText("homeInProgressTickets", inProgressTickets);
+    setElText("homeRecoveredAmount", formatCurrency(data.recovered_amount || 0));
+    setElText("homeSolvedTickets", resolvedCases);
 
     renderHomeUrgentList();
 
@@ -630,7 +694,7 @@ function generateSummaryVisualizerHtml() {
   const statusSegments = [
     { label: "Solved / Refunded", count: solvedCount, color: "#059669" },
     { label: "Under Investigation", count: inProgCount, color: "#d97706" },
-    { label: "Accounts Blocked", count: frozenCount, color: "#0284c7" },
+    { label: "Accounts Blocked", count: frozenCount, color: "#ea580c" },
     { label: "Urgent Escalated", count: escalatedCount, color: "#dc2626" },
     { label: "Urgent Open", count: openCount, color: "#7c3aed" }
   ].filter(s => s.count > 0);
@@ -736,7 +800,7 @@ function renderHomeUrgentList() {
       <div class="critical-item" onclick="openIncidentDossier('${t.ticket_id}')">
         <div class="crit-left">
           <div class="crit-title-row">
-            <span class="code-font" style="font-weight: 700; color: var(--primary);">${t.ticket_number}</span>
+            <span class="code-font" style="font-weight: 700; color: #1c1917;">${t.ticket_number}</span>
             ${getSeverityBadgeHtml(t.severity)}
             ${getStatusBadgeHtml(t.status)}
           </div>
@@ -993,7 +1057,9 @@ function applyFilters() {
 
   // Update left menu badge to show active complaints count
   const badgeTicketCount = document.getElementById("badgeTicketCount");
-  if (badgeTicketCount) badgeTicketCount.textContent = activeTicketsPool.length;
+  if (badgeTicketCount && badgeTicketCount.textContent !== String(activeTicketsPool.length)) {
+    badgeTicketCount.textContent = String(activeTicketsPool.length);
+  }
 
   renderFraudTicketsTable(filteredTickets);
   updatePillCounts();
@@ -1055,7 +1121,7 @@ function renderSolvedTicketsTable(tickets) {
     return `
       <tr>
         <td>
-          <span class="code-font" style="font-weight: 700; color: var(--primary);">${t.ticket_number}</span>
+          <span class="code-font" style="font-weight: 600; color: #1c1917;">${t.ticket_number}</span>
         </td>
         <td>
           <div class="customer-cell">
@@ -1065,20 +1131,20 @@ function renderSolvedTicketsTable(tickets) {
         </td>
         <td>
           <div class="customer-cell">
-            <span class="customer-name" style="font-size: 12px;">${escapeHtml(t.email)}</span>
+            <span class="customer-name" style="font-size: 11.5px; color: var(--text-muted);">${escapeHtml(t.email)}</span>
             <span class="customer-sub code-font">${escapeHtml(t.customer_code)}</span>
           </div>
         </td>
         <td>
           <div class="customer-cell">
-            <span class="code-font" style="color: var(--text-main); font-weight: 600;">${t.account_number}</span>
+            <span class="code-font" style="color: var(--text-main); font-weight: 500;">${t.account_number}</span>
             <span class="customer-sub">${t.account_type || 'SAVINGS'}</span>
           </div>
         </td>
         <td>
-          <strong style="color: var(--text-main); font-size: 13px;">${escapeHtml(t.incident_type)}</strong>
-          <div style="font-size: 11px; color: var(--text-dim); margin-top: 2px;">
-            <i class="fa-solid fa-satellite-dish" style="font-size: 10px;"></i> ${escapeHtml(t.reported_channel)}
+          <span style="color: var(--text-main); font-size: 12.5px; font-weight: 400;">${escapeHtml(t.incident_type)}</span>
+          <div style="font-size: 10.5px; color: var(--text-dim); margin-top: 2px;">
+            <i class="fa-solid fa-satellite-dish" style="font-size: 9px;"></i> ${escapeHtml(t.reported_channel)}
           </div>
         </td>
         <td>
@@ -1174,8 +1240,8 @@ function renderFraudTicketsTable(tickets) {
           <input type="checkbox" class="ticket-select-checkbox table-checkbox" data-ticket-id="${t.ticket_id}" ${isChecked}>
         </td>
         <td>
-          <span class="code-font" style="font-weight: 700; color: var(--primary);">${t.ticket_number}</span>
-          ${t.isNew ? '<span class="tag-pill" style="background: var(--primary); color: #fff; font-size: 9px; font-weight: 700; margin-left: 6px; padding: 2px 6px; border-radius: 4px;">NEW</span>' : ''}
+          <span class="code-font" style="font-weight: 600; color: #1c1917;">${t.ticket_number}</span>
+          ${t.isNew ? '<span class="tag-pill" style="background: var(--primary); color: #fff; font-size: 9px; font-weight: 600; margin-left: 6px; padding: 2px 6px; border-radius: 4px;">NEW</span>' : ''}
         </td>
         <td>
           <div class="customer-cell">
@@ -1185,20 +1251,20 @@ function renderFraudTicketsTable(tickets) {
         </td>
         <td>
           <div class="customer-cell">
-            <span class="customer-name" style="font-size: 12px;">${escapeHtml(t.email)}</span>
+            <span class="customer-name" style="font-size: 11.5px; color: var(--text-muted);">${escapeHtml(t.email)}</span>
             <span class="customer-sub code-font">${escapeHtml(t.customer_code)}</span>
           </div>
         </td>
         <td>
           <div class="customer-cell">
-            <span class="code-font" style="color: var(--text-main); font-weight: 600;">${t.account_number}</span>
+            <span class="code-font" style="color: var(--text-main); font-weight: 500;">${t.account_number}</span>
             <span class="customer-sub">${t.account_type || 'SAVINGS'}</span>
           </div>
         </td>
         <td>
-          <strong style="color: var(--text-main); font-size: 13px;">${escapeHtml(t.incident_type)}</strong>
-          <div style="font-size: 11px; color: var(--text-dim); margin-top: 2px;">
-            <i class="fa-solid fa-satellite-dish" style="font-size: 10px;"></i> ${escapeHtml(t.reported_channel)}
+          <span style="color: var(--text-main); font-size: 12.5px; font-weight: 400;">${escapeHtml(t.incident_type)}</span>
+          <div style="font-size: 10.5px; color: var(--text-dim); margin-top: 2px;">
+            <i class="fa-solid fa-satellite-dish" style="font-size: 9px;"></i> ${escapeHtml(t.reported_channel)}
           </div>
         </td>
         <td>
@@ -2152,7 +2218,7 @@ function exportTicketsCSV() {
   const encodedUri = encodeURI(csvContent);
   const link = document.createElement("a");
   link.setAttribute("href", encodedUri);
-  link.setAttribute("download", `dummy_bank_fraud_report_${new Date().toISOString().slice(0, 10)}.csv`);
+  link.setAttribute("download", `abc_fraud_report_${new Date().toISOString().slice(0, 10)}.csv`);
   document.body.appendChild(link);
   link.click();
   document.body.removeChild(link);

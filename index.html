@@ -3,12 +3,12 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Dummy Bank Portal | Customer Fraud & Support Portal</title>
+  <title>ABC | Customer Fraud & Support Portal</title>
   <meta name="description" content="Easy and user-friendly Bank Portal to manage customer fraud complaints, accounts, and transactions.">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=JetBrains+Mono:wght@500;600&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="styles.css?v=7.0">
+  <link rel="stylesheet" href="styles.css?v=16.0">
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
 </head>
 <body class="bank-portal-theme">
@@ -16,12 +16,15 @@
   <!-- Top Global Header -->
   <header class="top-header" id="portalHeader">
     <div class="header-left">
+      <button class="btn-sidebar-toggle" id="btnSidebarToggle" title="Toggle Navigation Sidebar (Ctrl + B)" aria-label="Toggle Navigation">
+        <i class="fa-solid fa-bars"></i>
+      </button>
       <div class="bank-logo-wrap">
         <div class="logo-shield">
           <i class="fa-solid fa-building-columns"></i>
         </div>
         <div class="logo-text">
-          <span class="brand-title">DUMMY BANK PORTAL</span>
+          <span class="brand-title">ABC</span>
           <span class="brand-sub">Customer Support & Fraud Help Desk</span>
         </div>
       </div>
@@ -84,8 +87,13 @@
   <!-- Main Portal Layout -->
   <div class="portal-body">
     <!-- Sidebar Navigation Tabs -->
-    <aside class="portal-sidebar">
-      <div class="nav-section-title">BANK PORTAL MENU</div>
+    <aside class="portal-sidebar" id="portalSidebar">
+      <div class="sidebar-header-row">
+        <span class="nav-section-title">BANK PORTAL MENU</span>
+        <button class="btn-sidebar-close" id="btnSidebarClose" title="Close Side Menu" aria-label="Close Side Menu">
+          <i class="fa-solid fa-chevron-left"></i>
+        </button>
+      </div>
       <nav class="portal-nav" id="mainNavigation">
         <button class="nav-tab active" data-tab="tab-home" id="navTabHome" onclick="switchTab('tab-home')">
           <i class="fa-solid fa-house"></i>
@@ -128,14 +136,10 @@
         <!-- Hero Welcome Banner -->
         <div class="home-hero-card">
           <div class="home-hero-left">
-            <div class="home-hero-badge">
-              <span class="status-pulse green"></span>
-              <span>Central Branch Operations Active</span>
-            </div>
             <h1 class="home-hero-title" id="homeHeroWelcome">Welcome, Officer</h1>
             <p class="home-hero-subtitle" id="homeHeroSubtitle">Fraud Prevention & Operations Hub</p>
             <div class="home-hero-actions">
-              <button class="btn btn-primary" id="btnHomeViewQueue">
+              <button class="btn btn-home-outline" id="btnHomeViewQueue">
                 <i class="fa-solid fa-clipboard-check"></i>
                 <span>View Fraud Complaints</span>
               </button>
@@ -153,11 +157,7 @@
               </div>
               <div class="hero-stat-item">
                 <span class="hero-stat-label">DUTY ROLE</span>
-                <strong class="hero-stat-val" id="homeHeroRole" style="color: #93c5fd;">Staff Officer</strong>
-              </div>
-              <div class="hero-stat-item">
-                <span class="hero-stat-label">RPA AUTOMATION</span>
-                <strong class="hero-stat-val" style="color: #6ee7b7;"><i class="fa-solid fa-circle-check"></i> Connected Live</strong>
+                <strong class="hero-stat-val" id="homeHeroRole">Staff Officer</strong>
               </div>
             </div>
           </div>
@@ -419,7 +419,7 @@
             
             <!-- Bulk Staff Assignment -->
             <div style="display: inline-flex; align-items: center; gap: 4px; background: rgba(255,255,255,0.1); padding: 2px 6px; border-radius: 6px; border: 1px solid rgba(255,255,255,0.18);">
-              <select id="bulkStaffSelect" class="form-select" style="font-size: 11px; padding: 4px 8px; height: 28px; background: #091e42; color: #fff; border-color: rgba(255,255,255,0.3); border-radius: 4px; max-width: 170px;">
+              <select id="bulkStaffSelect" class="form-select" style="font-size: 11px; padding: 4px 8px; height: 28px; background: #292524; color: #fff; border-color: rgba(255,255,255,0.3); border-radius: 4px; max-width: 170px;">
                 <option value="Abhishek Malwadkar (High-Value Fraud Forensics)">Abhishek Malwadkar</option>
                 <option value="Vikram Malhotra (Fraud Risk Management (All Access))">Vikram Malhotra</option>
                 <option value="Pooja Bansal (Customer Helpdesk & Disputes)">Pooja Bansal</option>
@@ -1000,8 +1000,8 @@
             <p id="dossierDescription" class="narrative-text">Customer reported unauthorized transaction...</p>
           </div>
 
-          <div class="narrative-box" style="margin-top: 10px; background: #eff6ff; border-color: #bfdbfe;">
-            <span class="dossier-label" style="color: #0052cc;"><i class="fa-solid fa-circle-check"></i> Action Taken by Bank:</span>
+          <div class="narrative-box" style="margin-top: 10px; background: #fff7ed; border-color: #fed7aa;">
+            <span class="dossier-label" style="color: #ea580c;"><i class="fa-solid fa-circle-check"></i> Action Taken by Bank:</span>
             <p id="dossierAction" class="narrative-text">Transfer recalled; Account secured.</p>
           </div>
         </div>
@@ -1081,6 +1081,6 @@
   <!-- Toast Notification Container -->
   <div class="toast-container" id="toastContainer"></div>
 
-  <script src="app.js?v=17.0"></script>
+  <script src="app.js?v=21.0"></script>
 </body>
 </html>

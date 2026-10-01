@@ -262,8 +262,55 @@ app.add_middleware(
 )
 
 # -------------------------------------------------------------
-# Database Connection Pooling (Thread-Safe Warm Pool)
+# Database Auto-Provisioning & Connection Pooling
 # -------------------------------------------------------------
+def ensure_database_and_schema():
+    """Verifies that the target database and core tables exist in PostgreSQL; creates them automatically if missing."""
+    try:
+        # 1. Connect to postgres system database to check/create target database
+        conn = pg8000.dbapi.connect(
+            host=DB_HOST,
+            port=DB_PORT,
+            user=DB_USER,
+            password=DB_PASS,
+            database="postgres"
+        )
+        conn.autocommit = True
+        cur = conn.cursor()
+        cur.execute("SELECT 1 FROM pg_database WHERE datname = %s", (DB_NAME,))
+        db_exists = cur.fetchone()
+        if not db_exists:
+            logger.info(f"Database '{DB_NAME}' does not exist. Creating database '{DB_NAME}'...")
+            cur.execute(f"CREATE DATABASE {DB_NAME} WITH ENCODING 'UTF8';")
+            logger.info(f"[+] Database '{DB_NAME}' created successfully.")
+        cur.close()
+        conn.close()
+
+        # 2. Connect to target database to check if tables exist
+        conn_target = pg8000.dbapi.connect(
+            host=DB_HOST,
+            port=DB_PORT,
+            user=DB_USER,
+            password=DB_PASS,
+            database=DB_NAME
+        )
+        conn_target.autocommit = True
+        cur_target = conn_target.cursor()
+        cur_target.execute("SELECT 1 FROM information_schema.tables WHERE table_name = 'fraud_tickets'")
+        tables_exist = cur_target.fetchone()
+        cur_target.close()
+        conn_target.close()
+
+        if not tables_exist:
+            logger.info("Core tables missing in database. Auto-running db_setup...")
+            import db_setup
+            db_setup.run_db_setup()
+            logger.info("[+] Database schema & sample records initialized successfully.")
+    except Exception as e:
+        logger.warning(f"Database pre-flight check notice: {e}")
+
+ensure_database_and_schema()
+
 logger.info(
     f"Initializing PostgreSQL Connection Pool (min={DB_POOL_MIN_CACHED}, max={DB_POOL_MAX_CONNECTIONS}) to {DB_NAME}..."
 )
@@ -436,39 +483,52 @@ class EmployeeCreateSchema(BaseModel):
     phone: Optional[str] = Field(None, description="Contact phone number", examples=["+91 98200 55441"])
 
 # -------------------------------------------------------------
-# Static Frontend Routes
+# Static Frontend Routes (Absolute Path Resolution)
 # -------------------------------------------------------------
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+
+NO_CACHE_HEADERS = {
+    "Cache-Control": "no-cache, no-store, must-revalidate",
+    "Pragma": "no-cache",
+    "Expires": "0"
+}
+
 @app.get("/login", include_in_schema=False)
 @app.get("/login.html", include_in_schema=False)
 async def serve_login():
-    if os.path.exists("login.html"):
-        return FileResponse("login.html", media_type="text/html")
+    file_path = os.path.join(BASE_DIR, "login.html")
+    if os.path.exists(file_path):
+        return FileResponse(file_path, media_type="text/html", headers=NO_CACHE_HEADERS)
     return HTMLResponse("<h2>Login Page Under Construction</h2>", status_code=200)
 
 @app.get("/customer", include_in_schema=False)
 @app.get("/customer.html", include_in_schema=False)
 @app.get("/netbanking", include_in_schema=False)
 async def serve_customer():
-    if os.path.exists("customer.html"):
-        return FileResponse("customer.html", media_type="text/html")
+    file_path = os.path.join(BASE_DIR, "customer.html")
+    if os.path.exists(file_path):
+        return FileResponse(file_path, media_type="text/html", headers=NO_CACHE_HEADERS)
     return HTMLResponse("<h2>Customer NetBanking Portal Under Construction</h2>", status_code=200)
 
 @app.get("/", include_in_schema=False)
 async def serve_index():
-    if os.path.exists("index.html"):
-        return FileResponse("index.html", media_type="text/html")
-    return HTMLResponse("<h2>Dummy Bank Portal is Running</h2>", status_code=200)
+    file_path = os.path.join(BASE_DIR, "index.html")
+    if os.path.exists(file_path):
+        return FileResponse(file_path, media_type="text/html", headers=NO_CACHE_HEADERS)
+    return HTMLResponse("<h2>ABC Bank Portal is Running</h2>", status_code=200)
 
 @app.get("/styles.css", include_in_schema=False)
 async def serve_css():
-    if os.path.exists("styles.css"):
-        return FileResponse("styles.css", media_type="text/css")
+    file_path = os.path.join(BASE_DIR, "styles.css")
+    if os.path.exists(file_path):
+        return FileResponse(file_path, media_type="text/css", headers=NO_CACHE_HEADERS)
     raise HTTPException(status_code=404, detail="styles.css not found")
 
 @app.get("/app.js", include_in_schema=False)
 async def serve_js():
-    if os.path.exists("app.js"):
-        return FileResponse("app.js", media_type="application/javascript")
+    file_path = os.path.join(BASE_DIR, "app.js")
+    if os.path.exists(file_path):
+        return FileResponse(file_path, media_type="application/javascript", headers=NO_CACHE_HEADERS)
     raise HTTPException(status_code=404, detail="app.js not found")
 
 # -------------------------------------------------------------
@@ -3240,7 +3300,7 @@ def api_download_audit_pdf(request: Request):
             fontName='Helvetica-Bold',
             fontSize=16,
             leading=20,
-            textColor=colors.HexColor('#0052cc')
+            textColor=colors.HexColor('#ea580c')
         )
         subtitle_style = ParagraphStyle(
             'DocSubtitle',
@@ -3278,10 +3338,10 @@ def api_download_audit_pdf(request: Request):
         story = []
 
         # Header Title
-        story.append(Paragraph("DUMMY BANK OF INDIA", title_style))
+        story.append(Paragraph("ABC", title_style))
         story.append(Paragraph("Official Fraud Audit & SAR Compliance Report | SOC Operations", subtitle_style))
         story.append(Spacer(1, 6))
-        story.append(HRFlowable(width="100%", thickness=1.5, color=colors.HexColor('#0052cc'), spaceBefore=2, spaceAfter=10))
+        story.append(HRFlowable(width="100%", thickness=1.5, color=colors.HexColor('#ea580c'), spaceBefore=2, spaceAfter=10))
 
         # Metadata Row
         now_str = datetime.now().strftime("%d %b %Y, %I:%M %p")
@@ -3298,9 +3358,9 @@ def api_download_audit_pdf(request: Request):
         ]
         meta_table = Table(meta_data, colWidths=[260, 260])
         meta_table.setStyle(TableStyle([
-            ('BACKGROUND', (0,0), (-1,-1), colors.HexColor('#f8fafc')),
-            ('BOX', (0,0), (-1,-1), 0.5, colors.HexColor('#cbd5e1')),
-            ('INNERGRID', (0,0), (-1,-1), 0.5, colors.HexColor('#e2e8f0')),
+            ('BACKGROUND', (0,0), (-1,-1), colors.HexColor('#faf8f5')),
+            ('BOX', (0,0), (-1,-1), 0.5, colors.HexColor('#fed7aa')),
+            ('INNERGRID', (0,0), (-1,-1), 0.5, colors.HexColor('#f2e7dd')),
             ('PADDING', (0,0), (-1,-1), 5),
         ]))
         story.append(meta_table)
@@ -3327,11 +3387,11 @@ def api_download_audit_pdf(request: Request):
         ]
         summary_table = Table([summary_headers, summary_values], colWidths=[104, 110, 110, 100, 96])
         summary_table.setStyle(TableStyle([
-            ('BACKGROUND', (0,0), (-1,0), colors.HexColor('#0052cc')),
-            ('BACKGROUND', (0,1), (-1,1), colors.HexColor('#f1f5f9')),
+            ('BACKGROUND', (0,0), (-1,0), colors.HexColor('#ea580c')),
+            ('BACKGROUND', (0,1), (-1,1), colors.HexColor('#fffaf5')),
             ('ALIGN', (0,0), (-1,-1), 'CENTER'),
             ('VALIGN', (0,0), (-1,-1), 'MIDDLE'),
-            ('GRID', (0,0), (-1,-1), 0.5, colors.HexColor('#cbd5e1')),
+            ('GRID', (0,0), (-1,-1), 0.5, colors.HexColor('#fed7aa')),
             ('PADDING', (0,0), (-1,-1), 5),
         ]))
         story.append(summary_table)
