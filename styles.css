@@ -973,10 +973,10 @@ button, [role="button"], a {
 
 /* Dark Enterprise Sidebar (Matching Port 3000 AE Theme) */
 .portal-sidebar {
-  width: 255px;
+  width: 230px;
   background: #121620;
   border-right: 1px solid #1e2433;
-  padding: 12px 10px 14px 10px;
+  padding: 14px 10px;
   display: flex;
   flex-direction: column;
   justify-content: flex-start;
@@ -987,83 +987,6 @@ button, [role="button"], a {
   max-height: calc(100vh - 56px);
   transition: width 0.28s cubic-bezier(0.4, 0, 0.2, 1), padding 0.28s ease, opacity 0.22s ease, margin 0.28s ease;
   white-space: nowrap;
-}
-
-/* ================= Sidebar Brand Logo Banner ================= */
-.sidebar-brand-banner {
-  padding: 4px 6px 12px 6px;
-  margin-bottom: 10px;
-  border-bottom: 1px solid #1e2433;
-}
-
-.sidebar-brand-top {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  position: relative;
-}
-
-.sidebar-logo-icon {
-  width: 38px;
-  height: 38px;
-  border-radius: 10px;
-  background: linear-gradient(135deg, #fd8f3a 0%, #f87917 100%);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  color: #ffffff;
-  font-size: 17px;
-  flex-shrink: 0;
-  box-shadow: 0 4px 12px rgba(248, 121, 23, 0.35);
-  transition: transform 0.35s cubic-bezier(0.34, 1.56, 0.64, 1);
-}
-
-.sidebar-brand-top:hover .sidebar-logo-icon {
-  transform: rotate(6deg) scale(1.08);
-}
-
-.sidebar-brand-info {
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-  min-width: 0;
-  flex: 1;
-}
-
-.sidebar-brand-title-row {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  flex-wrap: nowrap;
-}
-
-.sidebar-brand-title {
-  color: #f87917;
-  font-size: 15px;
-  font-weight: 800;
-  letter-spacing: -0.2px;
-  line-height: 1.2;
-}
-
-.sidebar-brand-badge {
-  background: #fff7ed;
-  color: #ea580c;
-  border: 1px solid #fed7aa;
-  font-size: 8.5px;
-  font-weight: 800;
-  padding: 1px 5px;
-  border-radius: 4px;
-  letter-spacing: 0.3px;
-  text-transform: uppercase;
-  flex-shrink: 0;
-}
-
-.sidebar-brand-sub {
-  color: #94a3b8;
-  font-size: 9.5px;
-  font-weight: 600;
-  white-space: normal;
-  line-height: 1.25;
 }
 
 /* Collapsed / Closed Sidebar State */
@@ -1083,8 +1006,8 @@ body.sidebar-closed .portal-sidebar,
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 0 4px 10px 6px;
-  margin-bottom: 2px;
+  padding: 0 4px 12px 6px;
+  margin-bottom: 4px;
 }
 
 .sidebar-header-row .nav-section-title {
