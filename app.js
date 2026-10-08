@@ -100,7 +100,8 @@ function handleStaffLogout() {
   if (confirm("Sign out from ABC?")) {
     localStorage.removeItem("fraud_staff_session");
     localStorage.removeItem("fraud_staff_token");
-    window.location.href = "/login";
+    const isSubPath = window.location.pathname.includes("/frauddetection");
+    window.location.href = isSubPath ? "/frauddetection/login" : "/login";
   }
 }
 

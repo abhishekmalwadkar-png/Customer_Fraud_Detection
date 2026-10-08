@@ -520,9 +520,10 @@
         localStorage.removeItem("fraud_customer_token");
         localStorage.removeItem("fraud_user_type");
 
-        const targetUrl = (window.location.protocol === "file:" || window.location.pathname.endsWith("login.html")) 
-          ? "index.html" 
-          : "/";
+        const isSubPath = window.location.pathname.includes("/frauddetection");
+        const targetUrl = isSubPath 
+          ? "/frauddetection/" 
+          : (window.location.protocol === "file:" || window.location.pathname.endsWith("login.html") ? "index.html" : "/");
 
         setTimeout(() => {
           window.location.href = targetUrl;
