@@ -1,0 +1,27 @@
+{
+  "name": "customer-fraud-detection-portal",
+  "version": "4.0.0",
+  "description": "Enterprise Banking Fraud Detection & RPA Intake Portal powered by Node.js, Express & PostgreSQL",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "dev": "node --watch server.js"
+  },
+  "keywords": [
+    "fraud-detection",
+    "banking",
+    "automationedge",
+    "rpa",
+    "postgresql",
+    "express"
+  ],
+  "author": "AutomationEdge",
+  "license": "ISC",
+  "dependencies": {
+    "cors": "^2.8.5",
+    "dotenv": "^16.4.7",
+    "express": "^4.21.2",
+    "pdfkit": "^0.16.0",
+    "pg": "^8.13.3"
+  }
+}

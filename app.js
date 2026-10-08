@@ -14,6 +14,13 @@ let ticketCurrentPage = 1;
 const ticketPageSize = 10;
 let solvedCurrentPage = 1;
 const solvedPageSize = 10;
+let allAuditLogs = [];
+let auditCurrentPage = 1;
+const auditPageSize = 10;
+let allCustomers = [];
+let filteredCustomers = [];
+let customerCurrentPage = 1;
+const customerPageSize = 10;
 let customerDirectoryData = [];
 let recentTxData = [];
 let selectedTicketIds = new Set();
@@ -188,7 +195,7 @@ document.addEventListener("DOMContentLoaded", () => {
     const isModalOpen = document.getElementById("newTicketModal")?.classList.contains("open");
     const isDrawerOpen = document.getElementById("drawerOverlay")?.classList.contains("open");
     if (!isModalOpen && !isDrawerOpen) {
-      loadOverviewStats();
+      loadOverviewStats(true, false);
       loadFraudTickets(true);
       checkSystemHealth();
     }
@@ -244,7 +251,7 @@ window.switchTab = function(targetTabId) {
     });
 
     if (targetTabId === "tab-dashboard") {
-      try { loadAnalytics(); } catch (e) { console.error("loadAnalytics error:", e); }
+      try { loadOverviewStats(false, true); loadAnalytics(); } catch (e) { console.error("loadAnalytics error:", e); }
     }
     if (targetTabId === "tab-customers") {
       try { loadCustomers(); } catch (e) { console.error("loadCustomers error:", e); }
@@ -259,7 +266,7 @@ window.switchTab = function(targetTabId) {
       try { loadDbStatus(); } catch (e) { console.error("loadDbStatus error:", e); }
     }
     if (targetTabId === "tab-home") {
-      try { renderHomeUrgentList(); } catch (e) { console.error("renderHomeUrgentList error:", e); }
+      try { loadOverviewStats(false, true); renderHomeUrgentList(); } catch (e) { console.error("renderHomeUrgentList error:", e); }
     }
     if (targetTabId === "tab-fraud-tickets") {
       try { applyFilters(); } catch (e) { console.error("applyFilters error:", e); }
@@ -370,12 +377,8 @@ function initEventListeners() {
   // Customer search
   const custSearchInput = document.getElementById("custSearchInput");
   if (custSearchInput) {
-    custSearchInput.addEventListener("input", (e) => {
-      const term = e.target.value.toLowerCase();
-      const rows = document.querySelectorAll("#customersTableBody tr");
-      rows.forEach(r => {
-        r.style.display = r.textContent.toLowerCase().includes(term) ? "" : "none";
-      });
+    custSearchInput.addEventListener("input", () => {
+      applyCustomerSearch();
     });
   }
 
@@ -391,15 +394,20 @@ function initEventListeners() {
   const modal = document.getElementById("newTicketModal");
   if (modal) {
     document.getElementById("btnOpenNewTicketModal")?.addEventListener("click", () => {
-      updatePresetPriority();
-      modal.classList.add("open");
+      openNewComplaintModal();
     });
     document.getElementById("btnCloseModal")?.addEventListener("click", () => {
-      modal.classList.remove("open");
+      closeNewComplaintModal();
     });
     document.getElementById("btnCancelModal")?.addEventListener("click", () => {
-      modal.classList.remove("open");
+      closeNewComplaintModal();
     });
+    modal.addEventListener("click", (e) => {
+      if (e.target === modal) closeNewComplaintModal();
+    });
+
+    // Auto-fill demo button listener
+    document.getElementById("btnAutoFillDemo")?.addEventListener("click", autoFillDemoData);
 
     // Modal Amount Real-time Priority Preset Listener
     const formAmountInput = document.getElementById("formAmount");
@@ -621,10 +629,13 @@ async function loadAllData() {
   ]);
 }
 
-async function loadOverviewStats() {
+let latestOverviewData = null;
+
+async function loadOverviewStats(isSilent = false, forceAnimate = false) {
   try {
     const res = await fetch("/api/overview");
     const data = await res.json();
+    latestOverviewData = data;
 
     const totalTickets = data.total_tickets || 0;
     const resolvedCases = data.resolved_cases || 0;
@@ -650,102 +661,215 @@ async function loadOverviewStats() {
     setElText("bubbleActiveTickets", activeTickets);
     setElText("bubbleInProgressTickets", inProgressTickets);
 
-    // Home Pulse Cards
+    // Home Pulse Cards (Port 3000 Theme)
+    setElText("homeTotalRecords", data.total_customers || "240");
     setElText("homeActiveTickets", activeTickets);
     setElText("homeInProgressTickets", inProgressTickets);
-    setElText("homeRecoveredAmount", formatCurrency(data.recovered_amount || 0));
-    setElText("homeSolvedTickets", resolvedCases);
+    const resolvedPct = totalTickets > 0 ? `${Math.round((resolvedCases / totalTickets) * 100)}%` : "100%";
+    setElText("homeSolvedTickets", resolvedPct);
 
-    renderHomeUrgentList();
+    // Live Date on Hero Banner
+    const heroDateEl = document.getElementById("heroLiveDate");
+    if (heroDateEl) {
+      const now = new Date();
+      heroDateEl.textContent = now.toLocaleDateString("en-US", { weekday: "long", month: "long", day: "numeric" });
+    }
 
     // Live Recovery Metrics for both Home & Dashboard tabs
     const totalAmt = data.total_amount || 0;
     const recoveredAmt = data.recovered_amount || 0;
     const pendingAmt = Math.max(0, totalAmt - recoveredAmt);
     const pct = totalAmt > 0 ? Math.round((recoveredAmt / totalAmt) * 100) : 0;
-    const deg = Math.round((pct / 100) * 360);
 
-    const updateRecoveryUI = (pctId, grossId, recId, pendId, metricId) => {
-      if (document.getElementById(pctId)) document.getElementById(pctId).textContent = `${pct}%`;
+    const setDetailsText = (grossId, recId, pendId) => {
       if (document.getElementById(grossId)) document.getElementById(grossId).textContent = formatCurrency(totalAmt);
       if (document.getElementById(recId)) document.getElementById(recId).textContent = formatCurrency(recoveredAmt);
       if (document.getElementById(pendId)) document.getElementById(pendId).textContent = formatCurrency(pendingAmt);
-      const metricEl = document.getElementById(metricId);
-      if (metricEl) {
-        metricEl.style.background = `conic-gradient(var(--emerald) 0deg ${deg}deg, #e2e8f0 ${deg}deg 360deg)`;
-      }
     };
 
-    updateRecoveryUI("recoveryRatePercent", "recGrossVal", "recRecoveredVal", "recPendingVal", "dashCircularMetric");
-    updateRecoveryUI("homeRecoveryRatePercent", "homeRecGrossVal", "homeRecRecoveredVal", "homeRecPendingVal", "homeCircularMetric");
+    setDetailsText("recGrossVal", "recRecoveredVal", "recPendingVal");
+    setDetailsText("homeRecGrossVal", "homeRecRecoveredVal", "homeRecPendingVal");
+
+    renderAnimatedRecoveryGauge("dashCircularMetric", "recoveryRatePercent", pct, forceAnimate);
+    renderAnimatedRecoveryGauge("homeCircularMetric", "homeRecoveryRatePercent", pct, forceAnimate);
+    renderAnimatedDonutChart("homeStatusDonutChart", forceAnimate);
+    if (!isSilent) {
+      renderHomeUrgentList();
+    }
   } catch (err) {
     console.error("Error loading overview stats:", err);
   }
 }
 
-function generateSummaryVisualizerHtml() {
-  const total = allTickets.length || 1;
-  const solvedCount = allTickets.filter(t => t.status === 'RESOLVED').length;
-  const inProgCount = allTickets.filter(t => t.status === 'UNDER_INVESTIGATION').length;
-  const frozenCount = allTickets.filter(t => t.status === 'FROZEN').length;
-  const escalatedCount = allTickets.filter(t => t.status === 'ESCALATED').length;
-  const openCount = allTickets.filter(t => !['RESOLVED', 'UNDER_INVESTIGATION', 'FROZEN', 'ESCALATED', 'CLOSED'].includes(t.status)).length;
+// -------------------------------------------------------------
+// Animated Counter & Chart Visualizer Handlers
+// -------------------------------------------------------------
+function animateCounter(element, startVal, endVal, durationMs = 800, prefix = '', suffix = '') {
+  if (!element) return;
+  const startNum = parseFloat(startVal) || 0;
+  const endNum = parseFloat(endVal) || 0;
+  if (startNum === endNum) {
+    element.textContent = `${prefix}${endNum}${suffix}`;
+    return;
+  }
+  const startTime = performance.now();
+  function step(now) {
+    const elapsed = now - startTime;
+    const progress = Math.min(elapsed / durationMs, 1);
+    // Smooth ease-out cubic
+    const ease = 1 - Math.pow(1 - progress, 3);
+    const current = Math.round(startNum + (endNum - startNum) * ease);
+    element.textContent = `${prefix}${current}${suffix}`;
+    if (progress < 1) {
+      requestAnimationFrame(step);
+    } else {
+      element.textContent = `${prefix}${endNum}${suffix}`;
+    }
+  }
+  requestAnimationFrame(step);
+}
+
+function renderAnimatedRecoveryGauge(metricId, pctId, pct, forceAnimate = false) {
+  const metricEl = document.getElementById(metricId);
+  if (!metricEl) return;
+
+  const r = 52;
+  const circumference = 2 * Math.PI * r; // ~326.72
+  const targetOffset = (circumference * (1 - (pct / 100))).toFixed(2);
+  const ringId = `${metricId}_ring`;
+
+  const existingRing = document.getElementById(ringId);
+  const existingVal = document.getElementById(pctId);
+
+  // If already rendered and not forced to re-animate on tab switch, silently update with no restart
+  if (existingRing && existingVal && !forceAnimate) {
+    existingRing.style.strokeDashoffset = targetOffset;
+    existingVal.textContent = `${pct}%`;
+    return;
+  }
+
+  metricEl.style.background = "none";
+  metricEl.style.position = "relative";
+  metricEl.innerHTML = `
+    <svg width="130" height="130" viewBox="0 0 130 130" style="transform: rotate(-90deg); position: absolute; inset: 0;">
+      <circle cx="65" cy="65" r="${r}" fill="transparent" stroke="#f1f5f9" stroke-width="14"></circle>
+      <circle class="animated-svg-ring" id="${ringId}" cx="65" cy="65" r="${r}" fill="transparent" stroke="#10b981" stroke-width="14" stroke-linecap="round" stroke-dasharray="${circumference.toFixed(2)}" stroke-dashoffset="${circumference.toFixed(2)}"></circle>
+    </svg>
+    <div class="metric-circle-inner" style="box-shadow: none; z-index: 1;">
+      <span class="metric-circle-val" id="${pctId}" style="color: #059669;">0%</span>
+      <span class="metric-circle-sub">Money Saved</span>
+    </div>
+  `;
+
+  requestAnimationFrame(() => {
+    const ring = document.getElementById(ringId);
+    if (ring) {
+      ring.style.strokeDashoffset = targetOffset;
+    }
+    const valEl = document.getElementById(pctId);
+    if (valEl) {
+      animateCounter(valEl, 0, pct, 800, '', '%');
+    }
+  });
+}
+
+function renderAnimatedDonutChart(containerId, forceAnimate = false) {
+  const container = document.getElementById(containerId);
+  if (!container) return;
+
+  let total = allTickets.length;
+  let solvedCount = allTickets.filter(t => t.status === 'RESOLVED').length;
+  let inProgCount = allTickets.filter(t => t.status === 'UNDER_INVESTIGATION').length;
+  let frozenCount = allTickets.filter(t => t.status === 'FROZEN' || t.status === 'BLOCKED').length;
+  let openCount = allTickets.filter(t => !['RESOLVED', 'UNDER_INVESTIGATION', 'FROZEN', 'BLOCKED', 'CLOSED'].includes(t.status)).length;
+
+  if (total === 0 && latestOverviewData) {
+    total = latestOverviewData.total_tickets || 0;
+    solvedCount = latestOverviewData.resolved_cases || 0;
+    inProgCount = latestOverviewData.under_investigation || 0;
+    frozenCount = latestOverviewData.frozen_accounts || 0;
+    openCount = Math.max(0, total - solvedCount - inProgCount - frozenCount);
+  }
+  const displayTotal = total || 1;
 
   const statusSegments = [
     { label: "Solved / Refunded", count: solvedCount, color: "#059669" },
     { label: "Under Investigation", count: inProgCount, color: "#d97706" },
     { label: "Accounts Blocked", count: frozenCount, color: "#ea580c" },
-    { label: "Urgent Escalated", count: escalatedCount, color: "#dc2626" },
-    { label: "Urgent Open", count: openCount, color: "#7c3aed" }
+    { label: "Urgent Open", count: openCount, color: "#dc2626" }
   ].filter(s => s.count > 0);
 
-  // SVG Donut Slices
   const r = 52;
-  const circumference = 2 * Math.PI * r;
+  const circumference = 2 * Math.PI * r; // ~326.72
   let offset = 0;
-  let circlesHtml = '';
 
-  if (statusSegments.length === 0) {
-    circlesHtml = `<circle cx="65" cy="65" r="${r}" fill="transparent" stroke="#e2e8f0" stroke-width="14"></circle>`;
-  } else {
-    circlesHtml = statusSegments.map(s => {
-      const pct = s.count / total;
-      const dashLength = pct * circumference;
-      const spaceLength = circumference - dashLength;
-      const currentOffset = offset;
-      offset -= dashLength;
-      return `<circle cx="65" cy="65" r="${r}" fill="transparent" stroke="${s.color}" stroke-width="14" stroke-dasharray="${dashLength} ${spaceLength}" stroke-dashoffset="${currentOffset}"></circle>`;
-    }).join("");
+  const segmentData = statusSegments.map(s => {
+    const pct = s.count / displayTotal;
+    const dashLength = (pct * circumference).toFixed(2);
+    const spaceLength = (circumference - (pct * circumference)).toFixed(2);
+    const curOffset = offset.toFixed(2);
+    offset -= (pct * circumference);
+    return { ...s, pct: Math.round(pct * 100), dashLength, spaceLength, offset: curOffset };
+  });
+
+  const totalValEl = document.getElementById(`${containerId}_total_val`);
+  const firstSlice = document.getElementById(`${containerId}_slice_0`);
+
+  // If already rendered and not forced to animate on tab switch, silently update with no restart
+  if (totalValEl && firstSlice && !forceAnimate) {
+    totalValEl.textContent = String(total);
+    segmentData.forEach((s, idx) => {
+      const sliceEl = document.getElementById(`${containerId}_slice_${idx}`);
+      if (sliceEl) {
+        sliceEl.style.strokeDasharray = `${s.dashLength} ${s.spaceLength}`;
+        sliceEl.style.strokeDashoffset = s.offset;
+      }
+    });
+    return;
   }
 
-  return `
+  let circlesHtml = `<circle cx="65" cy="65" r="${r}" fill="transparent" stroke="#f1f5f9" stroke-width="14"></circle>`;
+  segmentData.forEach((s, idx) => {
+    circlesHtml += `<circle id="${containerId}_slice_${idx}" class="animated-svg-slice" cx="65" cy="65" r="${r}" fill="transparent" stroke="${s.color}" stroke-width="14" stroke-dasharray="0 ${circumference.toFixed(2)}" stroke-dashoffset="${s.offset}"></circle>`;
+  });
+
+  container.innerHTML = `
     <div class="recovery-metrics-box">
       <div class="circular-metric" style="background: none; position: relative;">
-        <svg width="130" height="130" viewBox="0 0 130 130" style="transform: rotate(-90deg); position: absolute; inset: 0;">
-          <circle cx="65" cy="65" r="${r}" fill="transparent" stroke="#f1f5f9" stroke-width="14"></circle>
+        <svg width="130" height="130" viewBox="0 0 130 130" class="donut-svg" style="position: absolute; inset: 0;">
           ${circlesHtml}
         </svg>
         <div class="metric-circle-inner" style="box-shadow: none; z-index: 1;">
-          <span class="metric-circle-val" style="color: var(--text-main);">${allTickets.length}</span>
+          <span class="metric-circle-val" id="${containerId}_total_val" style="color: var(--text-main);">0</span>
           <span class="metric-circle-sub">Total Cases</span>
         </div>
       </div>
       <div class="recovery-details-list">
-        ${statusSegments.map(s => {
-          const pct = Math.round((s.count / total) * 100);
-          return `
-            <div class="rec-row">
-              <div style="display: flex; align-items: center; gap: 8px;">
-                <span class="legend-dot" style="background: ${s.color};"></span>
-                <span>${s.label}:</span>
-              </div>
-              <strong style="color: ${s.color}; font-size: 13px;">${s.count} <small style="color: var(--text-dim); font-weight: normal; margin-left: 4px;">(${pct}%)</small></strong>
+        ${segmentData.map(s => `
+          <div class="rec-row">
+            <div style="display: flex; align-items: center; gap: 8px;">
+              <span class="legend-dot" style="background: ${s.color};"></span>
+              <span>${s.label}:</span>
             </div>
-          `;
-        }).join("")}
+            <strong style="color: ${s.color}; font-size: 13px;">${s.count} <small style="color: var(--text-dim); font-weight: normal; margin-left: 4px;">(${s.pct}%)</small></strong>
+          </div>
+        `).join("")}
       </div>
     </div>
   `;
+
+  requestAnimationFrame(() => {
+    segmentData.forEach((s, idx) => {
+      const sliceEl = document.getElementById(`${containerId}_slice_${idx}`);
+      if (sliceEl) {
+        sliceEl.style.strokeDasharray = `${s.dashLength} ${s.spaceLength}`;
+      }
+    });
+    const totalEl = document.getElementById(`${containerId}_total_val`);
+    if (totalEl) {
+      animateCounter(totalEl, 0, total, 800);
+    }
+  });
 }
 
 function renderHomeUrgentList() {
@@ -768,11 +892,8 @@ function renderHomeUrgentList() {
     return isActive && isUrgent;
   });
 
-  // Always render the status breakdown donut chart on the RIGHT side
-  const donutContainer = document.getElementById("homeStatusDonutChart");
-  if (donutContainer) {
-    donutContainer.innerHTML = generateSummaryVisualizerHtml();
-  }
+  // Render the status breakdown donut chart on the RIGHT side
+  renderAnimatedDonutChart("homeStatusDonutChart");
 
   if (urgentTickets.length === 0) {
     container.innerHTML = `
@@ -911,20 +1032,7 @@ function loadSavedNotifications() {
 }
 
 function playNotificationSound() {
-  try {
-    const ctx = new (window.AudioContext || window.webkitAudioContext)();
-    const osc = ctx.createOscillator();
-    const gain = ctx.createGain();
-    osc.type = "sine";
-    osc.frequency.setValueAtTime(587.33, ctx.currentTime);
-    osc.frequency.exponentialRampToValueAtTime(880, ctx.currentTime + 0.12);
-    gain.gain.setValueAtTime(0.12, ctx.currentTime);
-    gain.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 0.35);
-    osc.connect(gain);
-    gain.connect(ctx.destination);
-    osc.start();
-    osc.stop(ctx.currentTime + 0.35);
-  } catch (e) {}
+  // Sound alerts silenced as requested
 }
 
 // -------------------------------------------------------------
@@ -1206,7 +1314,7 @@ function renderFraudTicketsTable(tickets) {
   document.getElementById("visibleTicketCount").textContent = tickets.length;
 
   if (tickets.length === 0) {
-    tbody.innerHTML = `<tr><td colspan="11" class="loading-state">No fraud tickets match your current filters.</td></tr>`;
+    tbody.innerHTML = `<tr><td colspan="8" class="loading-state">No fraud tickets match your current filters.</td></tr>`;
     renderPaginationControls("ticketsPagination", 1, 0, ticketPageSize, "changeTicketPage");
     return;
   }
@@ -1229,55 +1337,34 @@ function renderFraudTicketsTable(tickets) {
   }
 
   tbody.innerHTML = paginatedTickets.map(t => {
-    const sevBadge = getSeverityBadgeHtml(t.severity);
     const statusBadge = getStatusBadgeHtml(t.status);
     const newClass = t.isNew ? 'new-ticket-row' : '';
     const isChecked = selectedTicketIds.has(String(t.ticket_id)) ? 'checked' : '';
 
     return `
-      <tr class="${newClass}" style="${isChecked ? 'background-color: #eff6ff;' : ''}">
+      <tr class="${newClass}" style="${isChecked ? 'background-color: #fff7ed;' : ''}">
         <td style="text-align: center; width: 38px;">
           <input type="checkbox" class="ticket-select-checkbox table-checkbox" data-ticket-id="${t.ticket_id}" ${isChecked}>
         </td>
         <td>
-          <span class="code-font" style="font-weight: 600; color: #1c1917;">${t.ticket_number}</span>
-          ${t.isNew ? '<span class="tag-pill" style="background: var(--primary); color: #fff; font-size: 9px; font-weight: 600; margin-left: 6px; padding: 2px 6px; border-radius: 4px;">NEW</span>' : ''}
+          <span class="code-font" style="font-weight: 600; color: #0f172a;">${escapeHtml(t.ticket_number)}</span>
+          ${t.isNew ? '<span class="tag-pill" style="background: var(--brand-orange, #f87917); color: #fff; font-size: 9px; font-weight: 700; margin-left: 6px; padding: 1px 5px; border-radius: 4px;">NEW</span>' : ''}
         </td>
         <td>
-          <div class="customer-cell">
-            <span class="customer-name">${escapeHtml(t.full_name)}</span>
-            ${formatLocation(t.city, t.state, t.phone) ? `<span class="customer-sub">${escapeHtml(formatLocation(t.city, t.state, t.phone))}</span>` : ''}
-          </div>
+          <span style="font-weight: 600; color: #1e293b; font-size: 13px;">${escapeHtml(t.full_name)}</span>
         </td>
         <td>
-          <div class="customer-cell">
-            <span class="customer-name" style="font-size: 11.5px; color: var(--text-muted);">${escapeHtml(t.email)}</span>
-            <span class="customer-sub code-font">${escapeHtml(t.customer_code)}</span>
-          </div>
+          <span class="code-font" style="color: #475569; font-weight: 500; font-size: 12px;">${escapeHtml(t.account_number)}</span>
         </td>
         <td>
-          <div class="customer-cell">
-            <span class="code-font" style="color: var(--text-main); font-weight: 500;">${t.account_number}</span>
-            <span class="customer-sub">${t.account_type || 'SAVINGS'}</span>
-          </div>
+          <span style="color: #334155; font-size: 12.5px; font-weight: 500;">${escapeHtml(t.incident_type)}</span>
         </td>
         <td>
-          <span style="color: var(--text-main); font-size: 12.5px; font-weight: 400;">${escapeHtml(t.incident_type)}</span>
-          <div style="font-size: 10.5px; color: var(--text-dim); margin-top: 2px;">
-            <i class="fa-solid fa-satellite-dish" style="font-size: 9px;"></i> ${escapeHtml(t.reported_channel)}
-          </div>
-        </td>
-        <td>
-          <div class="amount-font ${t.amount_involved > 50000 ? 'highlight-red' : 'highlight-amber'}">
+          <div class="amount-font ${t.amount_involved > 50000 ? 'highlight-red' : 'highlight-amber'}" style="font-weight: 700; font-size: 12.5px;">
             ${formatCurrency(t.amount_involved)}
           </div>
-          ${t.recovered_amount > 0 ? `<div style="font-size: 10px; color: var(--emerald);">Rec: ${formatCurrency(t.recovered_amount)}</div>` : ''}
         </td>
-        <td>${sevBadge}</td>
         <td>${statusBadge}</td>
-        <td>
-          <span style="font-size: 12px; color: var(--text-muted);">${escapeHtml(t.assigned_investigator ? String(t.assigned_investigator).split('(')[0].trim() : 'Investigator')}</span>
-        </td>
         <td style="text-align: right;">
           <button class="btn btn-xs btn-outline" onclick="openIncidentDossier('${t.ticket_id}')">
             <i class="fa-solid fa-eye"></i> View Details
@@ -1293,7 +1380,7 @@ function renderFraudTicketsTable(tickets) {
 // -------------------------------------------------------------
 // Pagination Controls Generator & Handlers
 // -------------------------------------------------------------
-function renderPaginationControls(containerId, currentPage, totalItems, pageSize, changePageFnName) {
+function renderPaginationControls(containerId, currentPage, totalItems, pageSize, changePageFnName, itemLabel = "records") {
   const container = document.getElementById(containerId);
   if (!container) return;
 
@@ -1302,10 +1389,10 @@ function renderPaginationControls(containerId, currentPage, totalItems, pageSize
   if (totalItems === 0) {
     container.innerHTML = `
       <div class="pagination-info">
-        <span>No matching complaints found</span>
+        <span>No matching ${escapeHtml(itemLabel)} found</span>
       </div>
       <div class="pagination-nav">
-        <span class="pagination-page-size-tag">10 per page</span>
+        <span class="pagination-page-size-tag">${pageSize} per page</span>
       </div>
     `;
     return;
@@ -1347,8 +1434,8 @@ function renderPaginationControls(containerId, currentPage, totalItems, pageSize
 
   container.innerHTML = `
     <div class="pagination-info">
-      <span>Showing <strong>${startItem} - ${endItem}</strong> of <strong>${totalItems}</strong> complaints</span>
-      <span class="pagination-page-size-tag"><i class="fa-solid fa-list-ol"></i> 10 per page</span>
+      <span>Showing <strong>${startItem} - ${endItem}</strong> of <strong>${totalItems}</strong> ${escapeHtml(itemLabel)}</span>
+      <span class="pagination-page-size-tag"><i class="fa-solid fa-list-ol"></i> ${pageSize} per page</span>
     </div>
     <div class="pagination-nav">
       <button class="pagination-btn" ${prevDisabled} onclick="${changePageFnName}(${currentPage - 1})" title="Previous Page">
@@ -1384,6 +1471,21 @@ window.changeSolvedPage = function(newPage) {
   solvedCurrentPage = newPage;
   renderSolvedTicketsTable(filteredSolvedTickets);
   const tableEl = document.getElementById("solvedTicketsTable");
+  if (tableEl) {
+    const rect = tableEl.getBoundingClientRect();
+    if (rect.top < 0) {
+      tableEl.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }
+  }
+};
+
+window.changeAuditPage = function(newPage) {
+  const totalPages = Math.ceil(allAuditLogs.length / auditPageSize) || 1;
+  if (newPage < 1) newPage = 1;
+  if (newPage > totalPages) newPage = totalPages;
+  auditCurrentPage = newPage;
+  renderAuditLogsTable();
+  const tableEl = document.getElementById("auditTable");
   if (tableEl) {
     const rect = tableEl.getBoundingClientRect();
     if (rect.top < 0) {
@@ -1548,35 +1650,62 @@ function updatePillCounts() {
 // 5. Incident Dossier Slide-Over
 window.openIncidentDossier = async function(ticketId) {
   try {
-    const res = await fetch(`/api/fraud-tickets/${ticketId}`);
+    const tId = (typeof ticketId === 'object' && ticketId !== null) ? (ticketId.ticket_id || ticketId.id) : ticketId;
+    const res = await fetch(`/api/fraud-tickets/${tId}`);
     if (!res.ok) throw new Error("Ticket not found");
-    const ticket = await res.json();
+    const rawData = await res.json();
+
+    const ticket = rawData.ticket ? {
+      ...rawData.ticket,
+      customer_code: rawData.customer?.customer_code || rawData.ticket.customer_code || 'CUST-GEN',
+      full_name: rawData.customer?.full_name || rawData.customer?.customer_name || rawData.ticket.customer_name || 'Customer',
+      customer_name: rawData.customer?.customer_name || rawData.ticket.customer_name || 'Customer',
+      email: rawData.customer?.email || rawData.ticket.email || 'N/A',
+      phone: rawData.customer?.phone || rawData.ticket.phone || 'N/A',
+      risk_tier: rawData.customer?.risk_tier || rawData.ticket.risk_tier || rawData.ticket.severity || 'LOW',
+      account_type: rawData.accounts?.[0]?.account_type || rawData.ticket.account_type || 'CHECKING',
+      balance: rawData.accounts?.[0]?.balance !== undefined ? rawData.accounts[0].balance : (rawData.ticket.balance || 0),
+      account_status: rawData.accounts?.[0]?.status || rawData.ticket.account_status || 'ACTIVE',
+      transactions: rawData.transactions || rawData.ticket.transactions || [],
+      audit_logs: rawData.audit_logs || rawData.ticket.audit_logs || []
+    } : rawData;
+
     currentDossierTicket = ticket;
 
-    document.getElementById("drawerTicketNumber").textContent = ticket.ticket_number;
+    const tNumEl = document.getElementById("drawerTicketNumber");
+    if (tNumEl) tNumEl.textContent = ticket.ticket_number || `#${ticket.ticket_id}`;
     
     // Severity badge in drawer
     const sevBadge = document.getElementById("drawerSeverityBadge");
-    sevBadge.className = `tag-pill tag-${ticket.severity.toLowerCase()}`;
-    sevBadge.textContent = ticket.severity;
+    if (sevBadge) {
+      const sev = (ticket.severity || "MEDIUM").toLowerCase();
+      sevBadge.className = `tag-pill tag-${sev}`;
+      sevBadge.textContent = ticket.severity || "MEDIUM";
+    }
+
+    // Helper to safely assign text
+    const setTxt = (id, val) => {
+      const el = document.getElementById(id);
+      if (el) el.textContent = (val !== undefined && val !== null && val !== "") ? val : "N/A";
+    };
 
     // Victim details
-    document.getElementById("dossierName").textContent = ticket.full_name;
-    document.getElementById("dossierCode").textContent = ticket.customer_code;
-    document.getElementById("dossierEmail").textContent = ticket.email;
-    document.getElementById("dossierPhone").textContent = ticket.phone;
-    document.getElementById("dossierAccount").textContent = ticket.account_number;
-    document.getElementById("dossierBalance").textContent = `${ticket.account_type || 'CHECKING'} (${formatCurrency(ticket.balance)}) - ${ticket.account_status}`;
+    setTxt("dossierName", ticket.full_name || ticket.customer_name);
+    setTxt("dossierCode", ticket.customer_code || "CUST-GEN");
+    setTxt("dossierEmail", ticket.email || "N/A");
+    setTxt("dossierPhone", ticket.phone || "N/A");
+    setTxt("dossierAccount", ticket.account_number || "N/A");
+    setTxt("dossierBalance", `${ticket.account_type || 'CHECKING'} (${formatCurrency(ticket.balance || 0)}) - ${ticket.account_status || 'ACTIVE'}`);
 
     // Forensics
-    document.getElementById("dossierType").textContent = ticket.incident_type;
-    document.getElementById("dossierAmount").textContent = formatCurrency(ticket.amount_involved);
-    document.getElementById("dossierRecovered").textContent = formatCurrency(ticket.recovered_amount);
-    document.getElementById("dossierChannel").textContent = ticket.reported_channel;
-    document.getElementById("dossierIp").textContent = ticket.flagged_ip_or_location || "N/A";
-    document.getElementById("dossierSuspect").textContent = ticket.suspect_entity || "Under Forensics Tracing";
-    document.getElementById("dossierDescription").textContent = ticket.description;
-    document.getElementById("dossierAction").textContent = ticket.action_taken || "Incident registered in database. Active forensics docket.";
+    setTxt("dossierType", ticket.incident_type || "Fraud Incident");
+    setTxt("dossierAmount", formatCurrency(ticket.amount_involved || 0));
+    setTxt("dossierRecovered", formatCurrency(ticket.recovered_amount || 0));
+    setTxt("dossierChannel", ticket.reported_channel || "Portal");
+    setTxt("dossierIp", ticket.flagged_ip_or_location || "N/A");
+    setTxt("dossierSuspect", ticket.suspect_entity || "Under Forensics Tracing");
+    setTxt("dossierDescription", ticket.description || "Incident logged.");
+    setTxt("dossierAction", ticket.action_taken || "Incident registered in database. Active forensics docket.");
 
     // Assigned Staff
     const currentStaff = ticket.assigned_investigator || (allStaffMembers.length > 0 ? (allStaffMembers[0].department ? `${allStaffMembers[0].full_name} (${allStaffMembers[0].department})` : allStaffMembers[0].full_name) : "Abhishek Malwadkar (High-Value Fraud Forensics)");
@@ -1636,9 +1765,19 @@ window.openIncidentDossier = async function(ticketId) {
     const alertBlocked = document.getElementById("drawerBlockedAlert");
     if (btnFreeze) {
       btnFreeze.style.display = "block";
-      btnFreeze.innerHTML = isBlocked 
-        ? `<i class="fa-solid fa-lock"></i> Re-Trigger T4 Block Workflow` 
-        : `<i class="fa-solid fa-lock"></i> Temporarily Block Customer Account`;
+      if (isBlocked) {
+        btnFreeze.className = "btn btn-outline btn-block";
+        btnFreeze.style.borderColor = "#10b981";
+        btnFreeze.style.color = "#047857";
+        btnFreeze.innerHTML = `<i class="fa-solid fa-lock-open"></i> Unblock Customer Account`;
+        btnFreeze.onclick = handleUnblockAction;
+      } else {
+        btnFreeze.className = "btn btn-danger btn-block";
+        btnFreeze.style.borderColor = "";
+        btnFreeze.style.color = "";
+        btnFreeze.innerHTML = `<i class="fa-solid fa-lock"></i> Temporarily Block Customer Account`;
+        btnFreeze.onclick = handleFreezeAction;
+      }
     }
     if (alertBlocked) alertBlocked.style.display = isBlocked ? "block" : "none";
 
@@ -1656,7 +1795,7 @@ window.openIncidentDossier = async function(ticketId) {
 
     document.getElementById("drawerOverlay").classList.add("open");
   } catch (err) {
-    showToast("Error opening ticket dossier: " + err.message, "error");
+    console.error("Error opening ticket dossier:", err);
   }
 };
 
@@ -1671,7 +1810,6 @@ async function handleFreezeAction() {
     btnFreeze.disabled = true;
     btnFreeze.innerHTML = `<div class="spinner" style="width: 14px; height: 14px; border-width: 2px;"></div> Dispatching T4 Workflow...`;
   }
-  showToast(`Dispatching 'BlockBankAccount' workflow to AutomationEdge T4 for account ${accNum}...`, "info");
 
   try {
     const res = await fetch("/api/workflow/block-account", {
@@ -1681,24 +1819,71 @@ async function handleFreezeAction() {
     });
     const data = await res.json();
     if (data.success) {
-      const reqId = data.ae_integration?.automation_request_id || data.ae_integration?.response?.automationRequestId;
-      const msg = reqId 
-        ? `⚡ Dispatched 'BlockBankAccount' workflow to T4 Server (Req #${reqId}). Account status will update to Blocked once T4 workflow execution completes.` 
-        : `⚡ Dispatched 'BlockBankAccount' workflow to AutomationEdge T4. Account status will update once T4 completes execution.`;
-      showToast(msg, "info");
-      
-      // Close drawer and let 1.5s background polling reflect actual DB status once T4 finishes
-      document.getElementById("drawerOverlay").classList.remove("open");
+      currentDossierTicket.status = "FROZEN";
+      currentDossierTicket.account_status = "FROZEN";
+      allTickets.forEach(t => {
+        if (t.ticket_number === ticketNum || String(t.ticket_id) === String(currentDossierTicket.ticket_id) || (accNum && t.account_number === accNum && t.status !== "RESOLVED" && t.status !== "CLOSED")) {
+          t.status = "FROZEN";
+          t.account_status = "FROZEN";
+        }
+      });
+      applyFilters();
       loadAllData();
+      document.getElementById("drawerOverlay").classList.remove("open");
     } else {
-      showToast("Error: " + (data.message || data.detail || "Workflow failed to trigger"), "error");
+      console.error("Workflow trigger failed:", data.message || data.detail);
     }
   } catch (err) {
-    showToast("Could not block account: " + err.message, "error");
+    console.error("Could not block account:", err);
   } finally {
     if (btnFreeze) {
       btnFreeze.disabled = false;
       btnFreeze.innerHTML = `<i class="fa-solid fa-lock"></i> Temporarily Block Customer Account`;
+    }
+  }
+}
+
+async function handleUnblockAction() {
+  if (!currentDossierTicket) return;
+  const accNum = currentDossierTicket.account_number;
+  const ticketNum = currentDossierTicket.ticket_number;
+
+  const btnFreeze = document.getElementById("btnDrawerFreeze");
+  if (btnFreeze) {
+    btnFreeze.disabled = true;
+    btnFreeze.innerHTML = `<div class="spinner" style="width: 14px; height: 14px; border-width: 2px;"></div> Unblocking on T4...`;
+  }
+
+  try {
+    const res = await fetch("/api/workflow/unblock-account", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ account_number: accNum, ticket_number: ticketNum })
+    });
+    const data = await res.json();
+    if (data.success) {
+      currentDossierTicket.account_status = "ACTIVE";
+      if (currentDossierTicket.status === "FROZEN") {
+        currentDossierTicket.status = "UNDER_INVESTIGATION";
+      }
+      allTickets.forEach(t => {
+        if (t.account_number === accNum) {
+          t.account_status = "ACTIVE";
+          if (t.status === "FROZEN") t.status = "UNDER_INVESTIGATION";
+        }
+      });
+      applyFilters();
+      loadAllData();
+      document.getElementById("drawerOverlay").classList.remove("open");
+    } else {
+      console.error("Unblock failed:", data.message || data.detail);
+    }
+  } catch (err) {
+    console.error("Could not unblock account:", err);
+  } finally {
+    if (btnFreeze) {
+      btnFreeze.disabled = false;
+      btnFreeze.innerHTML = `<i class="fa-solid fa-lock-open"></i> Unblock Customer Account`;
     }
   }
 }
@@ -1708,10 +1893,6 @@ async function handleStatusUpdate(newStatus) {
   const ticketId = currentDossierTicket.ticket_id;
   const ticketNum = currentDossierTicket.ticket_number;
   const accNum = currentDossierTicket.account_number || "";
-
-  if (newStatus === "RESOLVED") {
-    showToast(`Dispatching 'ResolveFraudTicket' workflow to AutomationEdge T4 for ticket ${ticketNum}...`, "info");
-  }
 
   try {
     let res;
@@ -1738,33 +1919,20 @@ async function handleStatusUpdate(newStatus) {
     }
     const data = await res.json();
     if (data.success) {
-      const friendlyStatus = newStatus === 'RESOLVED' ? 'Solved / Refunded' : (newStatus === 'FROZEN' ? 'Account Blocked' : (newStatus === 'ESCALATED' ? 'Escalated' : 'In Progress'));
-      const reqId = data.ae_integration?.automation_request_id || data.ae_integration?.response?.automationRequestId;
-
-      if (newStatus === "RESOLVED") {
-        const msg = reqId
-          ? `⚡ Dispatched 'ResolveFraudTicket' workflow to T4 Server (Req #${reqId}). Ticket status will update to Solved once T4 workflow execution completes.`
-          : `⚡ Dispatched 'ResolveFraudTicket' workflow to T4 Server. Ticket status will update once T4 completes execution.`;
-        showToast(msg, "info");
-      } else {
-        showToast(`Complaint ${ticketNum} updated to "${friendlyStatus}"`, "success");
-        currentDossierTicket.status = newStatus;
-        allTickets.forEach(t => {
-          if (String(t.ticket_id) === String(ticketId) || t.ticket_number === ticketNum) {
-            t.status = newStatus;
-          }
-        });
-        applyFilters();
-        renderHomeUrgentList();
-      }
-
+      currentDossierTicket.status = newStatus;
+      allTickets.forEach(t => {
+        if (String(t.ticket_id) === String(ticketId) || t.ticket_number === ticketNum) {
+          t.status = newStatus;
+        }
+      });
+      applyFilters();
       loadAllData();
       document.getElementById("drawerOverlay").classList.remove("open");
     } else {
-      showToast("Error updating status: " + (data.message || data.detail || "Failed"), "error");
+      console.error("Error updating status:", data.message || data.detail);
     }
   } catch (err) {
-    showToast("Could not update status: " + err.message, "error");
+    console.error("Could not update status:", err);
   }
 }
 
@@ -1891,6 +2059,104 @@ async function executeBulkStaffAssign(newStaff) {
   }
 }
 
+// 7. Demo Presets & Fast Intake
+const DEMO_FRAUD_PRESETS = [
+  {
+    name: "Swati Deshmukh",
+    email: "swati.deshmukh467@example.com",
+    phone: "+91 99382 73286",
+    accNum: "ACT-BATCH-62246",
+    accType: "CURRENT",
+    incidentType: "Fake QR Code Scam",
+    amount: 66771.55,
+    suspect: "EasyLoan Mobile App Hub",
+    desc: "Customer scanned unauthorized QR code at merchant outlet expecting cashback offer."
+  },
+  {
+    name: "Vikram Iyer",
+    email: "vikram.iyer972@example.com",
+    phone: "+91 98174 62496",
+    accNum: "ACT-BATCH-11195",
+    accType: "SAVINGS",
+    incidentType: "Unauthorized ATM Withdrawal",
+    amount: 27651.70,
+    suspect: "ATM Terminal Indiranagar Bangalore",
+    desc: "Multiple cash withdrawals reported without physical ATM card or PIN shared."
+  },
+  {
+    name: "Neha Verma",
+    email: "neha.verma649@example.com",
+    phone: "+91 99575 92693",
+    accNum: "ACT-BATCH-83446",
+    accType: "CURRENT",
+    incidentType: "Fake Loan Approval Fee Scam",
+    amount: 74021.43,
+    suspect: "FastLoan Processing Pvt Ltd",
+    desc: "Customer asked to deposit upfront verification fee for pre-approved loan disbursement."
+  },
+  {
+    name: "Meera Singh",
+    email: "meera.singh268@example.com",
+    phone: "+91 99018 69905",
+    accNum: "ACT-BATCH-38281",
+    accType: "CURRENT",
+    incidentType: "UPI Impersonation Fraud",
+    amount: 35672.26,
+    suspect: "QuickPay Merchant Gate #104",
+    desc: "Received fake electricity bill reminder call asking to pay ₹10 via UPI approval link."
+  },
+  {
+    name: "Aarav Patel",
+    email: "aarav.patel512@example.com",
+    phone: "+91 98765 43210",
+    accNum: "ACT-BATCH-99412",
+    accType: "SAVINGS",
+    incidentType: "SIM Swap Fraud",
+    amount: 125000.00,
+    suspect: "Offshore Crypto Exchange Wallet",
+    desc: "SIM card abruptly lost network signal; unauthorized netbanking fund transfers initiated."
+  }
+];
+
+let currentDemoPresetIdx = 0;
+
+window.openNewComplaintModal = function() {
+  const modal = document.getElementById("newTicketModal");
+  if (modal) {
+    modal.classList.add("open");
+    populateStaffDropdowns();
+    updatePresetPriority();
+  }
+};
+
+window.closeNewComplaintModal = function() {
+  const modal = document.getElementById("newTicketModal");
+  if (modal) modal.classList.remove("open");
+};
+
+window.autoFillDemoData = function() {
+  const preset = DEMO_FRAUD_PRESETS[currentDemoPresetIdx % DEMO_FRAUD_PRESETS.length];
+  currentDemoPresetIdx++;
+
+  const setVal = (id, val) => {
+    const el = document.getElementById(id);
+    if (el) el.value = val;
+  };
+
+  setVal("formCustName", preset.name);
+  setVal("formCustEmail", preset.email);
+  setVal("formCustPhone", preset.phone);
+  setVal("formAccNum", preset.accNum);
+  setVal("formAccType", preset.accType);
+  setVal("formIncidentType", preset.incidentType);
+  setVal("formAmount", preset.amount);
+  setVal("formSuspect", preset.suspect);
+  setVal("formDescription", preset.desc);
+
+  updatePresetPriority();
+  showToast(`⚡ Demo autofilled: ${preset.name} (${preset.incidentType} - ₹${preset.amount.toLocaleString('en-IN')})`, "info");
+};
+
 async function handleCreateNewTicket(e) {
   e.preventDefault();
   const amt = parseFloat(document.getElementById("formAmount").value) || 0;
@@ -1900,17 +2166,17 @@ async function handleCreateNewTicket(e) {
     : (allStaffMembers.length > 0 ? (allStaffMembers[0].department ? `${allStaffMembers[0].full_name} (${allStaffMembers[0].department})` : allStaffMembers[0].full_name) : "Abhishek Malwadkar (High-Value Fraud Forensics)");
 
   const payload = {
-    full_name: document.getElementById("formCustName").value,
-    email: document.getElementById("formCustEmail").value,
-    phone: document.getElementById("formCustPhone").value,
-    account_number: document.getElementById("formAccNum").value,
+    full_name: document.getElementById("formCustName").value.trim(),
+    email: document.getElementById("formCustEmail").value.trim(),
+    phone: document.getElementById("formCustPhone").value.trim(),
+    account_number: document.getElementById("formAccNum").value.trim(),
     account_type: document.getElementById("formAccType").value,
     incident_type: document.getElementById("formIncidentType").value,
     amount_involved: amt,
     severity: computedSeverity,
     assigned_investigator: staffAssignee,
-    suspect_entity: document.getElementById("formSuspect").value,
-    description: document.getElementById("formDescription").value,
+    suspect_entity: (document.getElementById("formSuspect").value || "Unknown Beneficiary").trim(),
+    description: (document.getElementById("formDescription").value || `Complaint logged for ${document.getElementById("formIncidentType").value}`).trim(),
     reported_channel: "Customer Help Desk"
   };
 
@@ -1925,12 +2191,15 @@ async function handleCreateNewTicket(e) {
       body: JSON.stringify(payload)
     });
     const data = await res.json();
-    if (data.success) {
-      showToast(`Fraud Complaint ${data.ticket_number} registered & assigned to ${staffAssignee}!`, "success");
-      document.getElementById("newTicketModal").classList.remove("open");
-      document.getElementById("newFraudTicketForm").reset();
+    if (data.success || data.ticket_number || data.ticket_id) {
+      const tNum = data.ticket_number || "FRD-2026-NEW";
+      showToast(`Complaint ${tNum} created in PostgreSQL & assigned to ${staffAssignee}!`, "success");
+      document.getElementById("newTicketModal")?.classList.remove("open");
+      document.getElementById("newFraudTicketForm")?.reset();
       updatePresetPriority();
       loadAllData();
+    } else {
+      showToast("Error creating complaint: " + (data.error || data.detail || "Failed"), "error");
     }
   } catch (err) {
     showToast("Error registering complaint: " + err.message, "error");
@@ -1940,46 +2209,115 @@ async function handleCreateNewTicket(e) {
 // 8. Customer 360 Directory
 async function loadCustomers() {
   const tbody = document.getElementById("customersTableBody");
+  if (!tbody) return;
   try {
+    tbody.innerHTML = `<tr><td colspan="11" class="loading-state"><div class="spinner"></div> Loading customer directory from PostgreSQL...</td></tr>`;
     const res = await fetch("/api/customers");
-    allCustomers = await res.json();
-
-    tbody.innerHTML = allCustomers.map(c => `
-      <tr>
-        <td><span class="code-font highlight-cyan">${c.customer_code}</span></td>
-        <td>
-          <div class="customer-cell">
-            <span class="customer-name">${escapeHtml(c.full_name)}</span>
-            <span class="customer-sub">${escapeHtml(c.phone || '')}</span>
-          </div>
-        </td>
-        <td><span style="font-size: 12px; color: var(--text-muted);">${escapeHtml(c.email)}</span></td>
-        <td><span style="font-size: 12px;">${escapeHtml(formatLocation(c.city, c.state) || 'N/A')}</span></td>
-        <td><span class="code-font" style="color: var(--text-main);">${c.account_number || 'ACT-PENDING'}</span></td>
-        <td><span class="tag-pill tag-cyan">${c.account_type || 'CHECKING'}</span></td>
-        <td><span class="amount-font highlight-emerald">${formatCurrency(c.balance)}</span></td>
-        <td>
-          <span class="tag-pill ${c.account_status === 'FROZEN' ? 'tag-frozen' : 'tag-resolved'}">
-            ${c.account_status || 'ACTIVE'}
-          </span>
-        </td>
-        <td>${getSeverityBadgeHtml(c.risk_tier || 'LOW')}</td>
-        <td>
-          <span class="tag-pill ${c.fraud_reports_count > 0 ? 'tag-critical' : 'tag-low'}">
-            ${c.fraud_reports_count} Incident${c.fraud_reports_count === 1 ? '' : 's'}
-          </span>
-        </td>
-        <td style="text-align: right;">
-          <button class="btn btn-xs btn-outline" onclick="filterByCustomerName('${escapeHtml(c.full_name)}')">
-            <i class="fa-solid fa-list-check"></i> View Fraud
-          </button>
-        </td>
-      </tr>
-    `).join("");
+    const data = await res.json();
+    allCustomers = Array.isArray(data) ? data : [];
+    filteredCustomers = [...allCustomers];
+    customerCurrentPage = 1;
+    applyCustomerSearch();
   } catch (err) {
+    console.error("Error loading customer directory:", err);
     tbody.innerHTML = `<tr><td colspan="11" class="loading-state">Error loading customer directory.</td></tr>`;
+    renderPaginationControls("customersPagination", 1, 0, customerPageSize, "changeCustomerPage", "customers");
   }
 }
+
+function applyCustomerSearch() {
+  const q = (document.getElementById("custSearchInput")?.value || "").toLowerCase().trim();
+  if (!q) {
+    filteredCustomers = [...allCustomers];
+  } else {
+    filteredCustomers = allCustomers.filter(c => {
+      const code = (c.customer_code || "").toLowerCase();
+      const name = (c.full_name || c.customer_name || "").toLowerCase();
+      const email = (c.email || "").toLowerCase();
+      const phone = (c.phone || "").toLowerCase();
+      const acc = (c.account_number || "").toLowerCase();
+      const city = (c.city || "").toLowerCase();
+      const state = (c.state || "").toLowerCase();
+      return code.includes(q) || name.includes(q) || email.includes(q) || phone.includes(q) || acc.includes(q) || city.includes(q) || state.includes(q);
+    });
+  }
+  customerCurrentPage = 1;
+  renderCustomersTable();
+}
+
+function renderCustomersTable() {
+  const tbody = document.getElementById("customersTableBody");
+  if (!tbody) return;
+
+  const totalItems = filteredCustomers.length;
+
+  if (totalItems === 0) {
+    tbody.innerHTML = `<tr><td colspan="11" class="loading-state">No matching customer records found.</td></tr>`;
+    renderPaginationControls("customersPagination", 1, 0, customerPageSize, "changeCustomerPage", "customers");
+    return;
+  }
+
+  const startIndex = (customerCurrentPage - 1) * customerPageSize;
+  const paginatedCustomers = filteredCustomers.slice(startIndex, startIndex + customerPageSize);
+
+  tbody.innerHTML = paginatedCustomers.map(c => `
+    <tr>
+      <td><span class="code-font highlight-cyan" style="font-weight: 700;">${c.customer_code}</span></td>
+      <td>
+        <div class="customer-cell">
+          <span class="customer-name">${escapeHtml(c.full_name || c.customer_name)}</span>
+          <span class="customer-sub">${escapeHtml(c.phone || '')}</span>
+        </div>
+      </td>
+      <td><span style="font-size: 12px; color: var(--text-muted);">${escapeHtml(c.email)}</span></td>
+      <td><span style="font-size: 12px;">${escapeHtml(formatLocation(c.city, c.state) || 'N/A')}</span></td>
+      <td><span class="code-font" style="color: var(--text-main); font-weight: 600;">${c.account_number || 'ACT-PENDING'}</span></td>
+      <td><span class="tag-pill tag-cyan">${c.account_type || 'CHECKING'}</span></td>
+      <td><span class="amount-font highlight-emerald">${formatCurrency(c.balance)}</span></td>
+      <td>
+        <span class="tag-pill ${c.account_status === 'FROZEN' ? 'tag-frozen' : 'tag-resolved'}">
+          ${c.account_status || 'ACTIVE'}
+        </span>
+      </td>
+      <td>${getSeverityBadgeHtml(c.risk_tier || 'LOW')}</td>
+      <td>
+        <span class="tag-pill ${c.fraud_reports_count > 0 ? 'tag-critical' : 'tag-low'}">
+          ${c.fraud_reports_count} Incident${c.fraud_reports_count === 1 ? '' : 's'}
+        </span>
+      </td>
+      <td style="text-align: right;">
+        <button class="btn btn-xs btn-outline" onclick="filterByCustomerName('${escapeHtml(c.full_name || c.customer_name)}')">
+          <i class="fa-solid fa-list-check"></i> View Fraud
+        </button>
+      </td>
+    </tr>
+  `).join("");
+
+  renderPaginationControls("customersPagination", customerCurrentPage, totalItems, customerPageSize, "changeCustomerPage", "customers");
+}
+
+window.changeCustomerPage = function(newPage) {
+  const totalPages = Math.ceil(filteredCustomers.length / customerPageSize) || 1;
+  if (newPage < 1) newPage = 1;
+  if (newPage > totalPages) newPage = totalPages;
+  customerCurrentPage = newPage;
+  renderCustomersTable();
+  const tableEl = document.getElementById("customersTable");
+  if (tableEl) {
+    const rect = tableEl.getBoundingClientRect();
+    if (rect.top < 0) {
+      tableEl.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }
+  }
+};
+
+window.changeAuditPage = function(newPage) {
+  const totalPages = Math.ceil(allAuditLogs.length / auditPageSize) || 1;
+  if (newPage < 1) newPage = 1;
+  if (newPage > totalPages) newPage = totalPages;
+  auditCurrentPage = newPage;
+  renderAuditLogsTable();
+};
 
 window.filterByCustomerName = function(name) {
   const navFraud = document.getElementById("navTabFraudTickets");
@@ -2060,21 +2398,7 @@ async function loadAnalytics() {
       }).join("");
     }
 
-    // Reporting channels
-    const channelsEl = document.getElementById("chartChannels");
-    if (channelsEl && data.by_channel) {
-      channelsEl.innerHTML = data.by_channel.map(ch => `
-        <div class="channel-card">
-          <div class="channel-icon"><i class="fa-solid fa-tower-broadcast"></i></div>
-          <div>
-            <strong style="font-size: 13px; color: var(--text-main);">${escapeHtml(ch.channel)}</strong>
-            <div style="font-size: 11px; color: var(--text-dim); margin-top: 2px;">
-              ${ch.count} reports • ${formatCurrency(ch.amount)}
-            </div>
-          </div>
-        </div>
-      `).join("");
-    }
+
 
     // Critical queue list
     const critQueueEl = document.getElementById("criticalQueueList");
@@ -2102,23 +2426,58 @@ async function loadAnalytics() {
 async function loadAuditLogs() {
   const tbody = document.getElementById("auditTableBody");
   try {
+    tbody.innerHTML = `<tr><td colspan="7" class="loading-state"><div class="spinner"></div> Fetching staff activity logs from PostgreSQL...</td></tr>`;
     const res = await fetch("/api/audit-logs");
     const logs = await res.json();
-
-    tbody.innerHTML = logs.map(l => `
-      <tr>
-        <td><span class="code-font" style="color: var(--text-dim);">#LOG-${l.log_id}</span></td>
-        <td><span class="code-font highlight-cyan">${l.ticket_number || 'SYSTEM'}</span></td>
-        <td><strong style="color: var(--text-main); font-size: 12px;">${escapeHtml(l.actor)}</strong></td>
-        <td><span class="tag-pill tag-high">${escapeHtml(l.action)}</span></td>
-        <td><span style="font-size: 12px; color: var(--text-muted);">${escapeHtml(l.details)}</span></td>
-        <td><span class="code-font" style="font-size: 11px; color: var(--text-dim);">${escapeHtml(l.ip_address || '10.0.0.1')}</span></td>
-        <td><span style="font-size: 11px; color: var(--text-dim);">${formatDate(l.created_at)}</span></td>
-      </tr>
-    `).join("");
+    allAuditLogs = Array.isArray(logs) ? logs : [];
+    auditCurrentPage = 1;
+    renderAuditLogsTable();
   } catch (err) {
+    console.error("Error loading audit logs:", err);
     tbody.innerHTML = `<tr><td colspan="7" class="loading-state">Error loading audit logs.</td></tr>`;
   }
+}
+
+function renderAuditLogsTable() {
+  const tbody = document.getElementById("auditTableBody");
+  if (!tbody) return;
+
+  const totalItems = allAuditLogs.length;
+
+  if (totalItems === 0) {
+    tbody.innerHTML = `<tr><td colspan="7" class="loading-state">No staff activity logs recorded yet.</td></tr>`;
+    renderPaginationControls("auditPagination", 1, 0, auditPageSize, "changeAuditPage", "logs");
+    return;
+  }
+
+  const startIndex = (auditCurrentPage - 1) * auditPageSize;
+  const paginatedLogs = allAuditLogs.slice(startIndex, startIndex + auditPageSize);
+
+  tbody.innerHTML = paginatedLogs.map(l => {
+    let actionBadgeClass = "tag-medium";
+    const act = (l.action || '').toUpperCase();
+    if (act.includes("RESOLVED") || act.includes("SUCCESS")) {
+      actionBadgeClass = "tag-resolved";
+    } else if (act.includes("FROZEN") || act.includes("BLOCK") || act.includes("CRITICAL")) {
+      actionBadgeClass = "tag-critical";
+    } else if (act.includes("INVESTIGATION") || act.includes("CHANGED") || act.includes("REASSIGN")) {
+      actionBadgeClass = "tag-high";
+    }
+
+    return `
+      <tr>
+        <td><span class="code-font" style="color: var(--text-dim);">#LOG-${l.log_id}</span></td>
+        <td><span class="code-font highlight-cyan" style="font-weight: 700;">${escapeHtml(l.ticket_number || 'SYSTEM')}</span></td>
+        <td><strong style="color: var(--text-main); font-size: 12.5px;">${escapeHtml(l.customer_name || 'System / Batch')}</strong></td>
+        <td><span style="font-size: 12px; font-weight: 600; color: #334155;">${escapeHtml(l.actor || 'Staff')}</span></td>
+        <td><span class="tag-pill ${actionBadgeClass}">${escapeHtml(l.action)}</span></td>
+        <td><span style="font-size: 12px; color: var(--text-secondary); max-width: 320px; display: inline-block; white-space: normal; line-height: 1.4;">${escapeHtml(l.details)}</span></td>
+        <td><span style="font-size: 11.5px; color: var(--text-dim); white-space: nowrap;">${formatDate(l.created_at)}</span></td>
+      </tr>
+    `;
+  }).join("");
+
+  renderPaginationControls("auditPagination", auditCurrentPage, totalItems, auditPageSize, "changeAuditPage", "logs");
 }
 
 // 12. PostgreSQL & pgAdmin Hub
@@ -2278,16 +2637,6 @@ function escapeHtml(str) {
 }
 
 function showToast(message, type = "info") {
-  const container = document.getElementById("toastContainer");
-  const toast = document.createElement("div");
-  toast.className = `toast toast-${type}`;
-  toast.innerHTML = `
-    <i class="fa-solid ${type === 'error' ? 'fa-circle-xmark' : (type === 'warning' ? 'fa-triangle-exclamation' : 'fa-circle-check')}"></i>
-    <span>${escapeHtml(message)}</span>
-  `;
-  container.appendChild(toast);
-  setTimeout(() => {
-    toast.style.opacity = "0";
-    setTimeout(() => toast.remove(), 300);
-  }, 4000);
+  // Pop-up alerts disabled as requested: log to console only
+  console.log(`[Notification ${type}]: ${message}`);
 }

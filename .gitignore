@@ -24,5 +24,12 @@ Thumbs.db
 .idea/
 *.log
 
+# Node.js dependencies
+node_modules/
+package-lock.json
+
+# Agents & AI configs
+.agents/
+
 # Scratch scripts
 scratch/

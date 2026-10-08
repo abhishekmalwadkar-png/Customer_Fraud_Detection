@@ -1,20 +1,20 @@
 #!/usr/bin/env python3
 """
 =============================================================================
-ABC Bank Fraud Portal - Automated 1-Click VM Deployment & Setup Engine
+ABC Bank Fraud Portal - Automated 1-Click VM & Machine Deployer
 =============================================================================
-This self-contained script automates the entire VM deployment lifecycle:
-  1. Detects OS (Linux / Windows) and validates Python environment.
-  2. Auto-installs all required dependencies from requirements.txt.
-  3. Validates PostgreSQL connectivity (auto-starts service on Linux).
-  4. Auto-creates the .env configuration if missing.
-  5. Auto-provisions the PostgreSQL database, tables, schema, and sample data.
+This self-contained script automates the entire deployment lifecycle:
+  1. Auto-creates and activates a Python virtual environment (.venv).
+  2. Auto-installs all required dependencies from requirements.txt & npm.
+  3. Auto-creates PostgreSQL database 'bank_fraud_portal' in pgAdmin if missing.
+  4. Auto-provisions tables, views, triggers, and curated complaints.
+  5. Auto-creates the .env configuration if missing.
   6. Configures Linux firewall / systemd 24/7 service (optional).
-  7. Starts the production ASGI Web Server (0.0.0.0:5050) and prints access URLs.
+  7. Starts the production server (0.0.0.0:5050) and prints access URLs.
 
 Usage:
-  python3 deploy_vm.py
-  python deploy_vm.py --service    # (Linux) Install and start systemd service
+  python deploy_machine.py
+  python deploy_vm.py
 =============================================================================
 """
 
