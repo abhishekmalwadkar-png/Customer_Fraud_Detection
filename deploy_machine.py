@@ -397,7 +397,7 @@ def main():
     print_banner()
 
     # Step 1: Ensure virtual environment and re-execute inside .venv
-    ensure_env_and_reexec()
+    ensure_venv_and_reexec()
 
     # Step 2: Install dependencies inside venv
     install_dependencies()
