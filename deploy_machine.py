@@ -288,15 +288,11 @@ def setup_postgresql_database():
             if schema_file.exists():
                 with open(schema_file, "r", encoding="utf-8") as sf:
                     sql_content = sf.read()
-                # Run statements
-                for stmt in sql_content.split(";"):
-                    s = stmt.strip()
-                    if s and not s.startswith("--"):
-                        try:
-                            t_cur.execute(s + ";")
-                        except Exception:
-                            pass
-                log_success("Tables, constraints, triggers, and full-text search views provisioned.")
+                try:
+                    t_cur._c.execute_simple(sql_content)
+                    log_success("Tables, constraints, triggers, and full-text search views provisioned.")
+                except Exception as ex:
+                    log_warn(f"Schema execution notice: {ex}")
 
         # Seed data using db_setup
         try:

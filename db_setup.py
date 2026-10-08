@@ -787,11 +787,66 @@ def run_db_setup():
         with open("schema.sql", "r", encoding="utf-8") as f:
             schema_sql = f.read()
         
-        for statement in schema_sql.split(";"):
-            stmt = statement.strip()
-            if stmt:
-                cursor.execute(stmt)
+        try:
+            cursor._c.execute_simple(schema_sql)
+        except Exception as ex:
+            print(f"[!] Simple query execution notice: {ex}")
         print("[+] Schema applied successfully!")
+
+        # Seed Staff Users and Employees (Pooja Deshmukh & SOC Team)
+        import hashlib
+        p_hash = hashlib.sha256("Password@123".encode("utf-8")).hexdigest()
+        
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS staff_users (
+                user_id SERIAL PRIMARY KEY,
+                username VARCHAR(80) UNIQUE NOT NULL,
+                password_hash VARCHAR(128) NOT NULL,
+                password_plain VARCHAR(80) DEFAULT 'Password@123',
+                full_name VARCHAR(100) NOT NULL,
+                role VARCHAR(40) DEFAULT 'INVESTIGATOR',
+                email VARCHAR(120) NOT NULL,
+                department VARCHAR(100),
+                is_active BOOLEAN DEFAULT TRUE,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            );
+        """)
+        
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS employees (
+                employee_id SERIAL PRIMARY KEY,
+                employee_code VARCHAR(20) UNIQUE,
+                username VARCHAR(80) UNIQUE NOT NULL,
+                password_hash VARCHAR(128) NOT NULL,
+                password_plain VARCHAR(80) DEFAULT 'Password@123',
+                full_name VARCHAR(100) NOT NULL,
+                role VARCHAR(40) DEFAULT 'INVESTIGATOR',
+                email VARCHAR(120) NOT NULL,
+                phone VARCHAR(25),
+                department VARCHAR(100),
+                designation VARCHAR(100),
+                is_active BOOLEAN DEFAULT TRUE,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            );
+        """)
+
+        cursor.execute("""
+            INSERT INTO staff_users (username, password_hash, password_plain, full_name, role, email, department, is_active)
+            VALUES 
+                ('pooja.deshmukh', %s, 'Password@123', 'Pooja Deshmukh', 'SOC_ANALYST', 'pooja.deshmukh@automationedge.ai', 'SOC Operations', TRUE),
+                ('investigator1', %s, 'Password@123', 'SOC Operations Team', 'FRAUD_INVESTIGATOR', 'soc.fraud@bank.internal', 'Cyber Defense', TRUE),
+                ('manager', %s, 'Password@123', 'Vikram Malhotra', 'MANAGER', 'vikram.m@bank.internal', 'Fraud Risk Management (All Access)', TRUE)
+            ON CONFLICT (username) DO NOTHING;
+        """, (p_hash, p_hash, p_hash))
+
+        cursor.execute("""
+            INSERT INTO employees (employee_code, username, password_hash, password_plain, full_name, role, email, phone, department, designation, is_active)
+            VALUES 
+                ('EMP-0101', 'pooja.deshmukh', %s, 'Password@123', 'Pooja Deshmukh', 'SOC_ANALYST', 'pooja.deshmukh@automationedge.ai', '+91 98201 00101', 'SOC Operations', 'Senior SOC Analyst', TRUE),
+                ('EMP-0001', 'investigator1', %s, 'Password@123', 'SOC Operations Team', 'FRAUD_INVESTIGATOR', 'soc.fraud@bank.internal', '+91 98201 00001', 'Cyber Defense', 'Fraud Lead', TRUE),
+                ('EMP-0002', 'manager', %s, 'Password@123', 'Vikram Malhotra', 'MANAGER', 'vikram.m@bank.internal', '+91 98201 00002', 'Fraud Risk Management (All Access)', 'Branch Manager', TRUE)
+            ON CONFLICT (username) DO NOTHING;
+        """, (p_hash, p_hash, p_hash))
 
         # 3. Seed Customers, Accounts, Fraud Tickets, Transactions, and Audit Logs
         print(f"[*] Seeding {len(CUSTOMERS_DATA)} Indian customer fraud records...")
@@ -869,7 +924,7 @@ def run_db_setup():
         print(f"\n[SUCCESS] PostgreSQL Database '{TARGET_DB}' fully initialized with Indian customer records!")
         print(f" -> Total Indian Customers created: {cust_cnt}")
         print(f" -> Total Fraud Complaints created: {ticket_cnt}")
-        print(f" -> Ready for pgAdmin 4 inspection under PostgreSQL 16 (user: postgres, db: {TARGET_DB})\n")
+        print(f" -> Ready for pgAdmin 4 inspection under PostgreSQL (user: postgres, db: {TARGET_DB})\n")
         
         cursor.close()
         conn.close()
