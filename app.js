@@ -51,27 +51,34 @@ function checkAuthSession() {
     currentStaffUser = JSON.parse(sessionStr);
     if (!currentStaffUser || !currentStaffUser.full_name) {
       currentStaffUser = {
-        user_id: 1,
-        username: "manager",
-        full_name: "Vikram Malhotra",
-        role: "MANAGER",
-        email: "vikram.m@bank.internal",
-        department: "Fraud Risk Management (All Access)"
+        user_id: 101,
+        username: "andrew",
+        full_name: "Andrew",
+        role: "SOC_ANALYST",
+        email: "andrew@automationedge.ai",
+        department: "SOC Operations"
       };
+    } else if (currentStaffUser.full_name === "Pooja Deshmukh" || currentStaffUser.username === "pooja.deshmukh") {
+      currentStaffUser.full_name = "Andrew";
+      currentStaffUser.username = "andrew";
+      currentStaffUser.email = "andrew@automationedge.ai";
+      try {
+        localStorage.setItem("fraud_staff_session", JSON.stringify(currentStaffUser));
+      } catch (e) {}
     }
   } catch (e) {
     currentStaffUser = {
-      user_id: 1,
-      username: "manager",
-      full_name: "Vikram Malhotra",
-      role: "MANAGER",
-      email: "vikram.m@bank.internal",
-      department: "Fraud Risk Management (All Access)"
+      user_id: 101,
+      username: "andrew",
+      full_name: "Andrew",
+      role: "SOC_ANALYST",
+      email: "andrew@automationedge.ai",
+      department: "SOC Operations"
     };
   }
 
-  const fullName = currentStaffUser.full_name || "Vikram Malhotra";
-  const roleName = currentStaffUser.role === "MANAGER" ? "Branch Manager (All Access)" : (currentStaffUser.department || "Fraud Investigator");
+  const fullName = currentStaffUser.full_name || "Andrew";
+  const roleName = currentStaffUser.department || (currentStaffUser.role === "MANAGER" ? "Branch Manager" : "SOC Operations");
 
   // Update Header & Home Hero User Profile UI
   const nameEl = document.getElementById("headerUserName");
@@ -84,8 +91,8 @@ function checkAuthSession() {
   if (nameEl) nameEl.textContent = fullName;
   if (roleEl) roleEl.textContent = roleName;
   if (avatarEl) {
-    const parts = fullName.split(" ");
-    const initials = parts.length > 1 ? (parts[0][0] + parts[1][0]).toUpperCase() : parts[0].slice(0, 2).toUpperCase();
+    const parts = fullName.trim().split(" ");
+    const initials = parts.length > 1 ? (parts[0][0] + parts[1][0]).toUpperCase() : parts[0].slice(0, 1).toUpperCase();
     avatarEl.textContent = initials;
   }
 
@@ -391,6 +398,14 @@ function initEventListeners() {
 
   document.getElementById("btnExportTicketsCSV").addEventListener("click", exportTicketsCSV);
 
+  // Clear Filters listeners
+  document.getElementById("btnClearFilters")?.addEventListener("click", clearFilters);
+  document.getElementById("btnQuickClearFilters")?.addEventListener("click", clearFilters);
+
+  // Clear Data (Direct UI Clear, preserving backend DB)
+  document.getElementById("btnClearDataHeader")?.addEventListener("click", clearComplaintsUI);
+  document.getElementById("btnTableClearData")?.addEventListener("click", clearComplaintsUI);
+
   // Modal Open / Close (if present)
   const modal = document.getElementById("newTicketModal");
   if (modal) {
@@ -648,26 +663,27 @@ async function loadOverviewStats(isSilent = false, forceAnimate = false) {
       if (el && el.textContent !== String(val)) el.textContent = String(val);
     };
 
-    setElText("kpiTotalCustomers", data.total_customers || "0");
-    setElText("kpiTotalTickets", totalTickets);
+    // Dashboard KPI Cards (Direct stable values, no continuous animations)
+    setElText("kpiTotalCustomers", (data.total_customers != null ? data.total_customers : 0).toLocaleString("en-IN"));
+    setElText("kpiTotalTickets", totalTickets.toLocaleString("en-IN"));
     setElText("badgeTicketCount", activeTickets);
     setElText("kpiTotalAmount", formatCurrency(data.total_amount || 0));
     setElText("kpiRecoveredAmount", formatCurrency(data.recovered_amount || 0));
-    setElText("kpiFrozenAccounts", data.frozen_accounts || "0");
-    setElText("kpiCriticalCount", data.critical_customers || "0");
+    setElText("kpiFrozenAccounts", (data.frozen_accounts || 0).toLocaleString("en-IN"));
+    setElText("kpiCriticalCount", (data.critical_customers || 0).toLocaleString("en-IN"));
 
     // Active & In Progress ticket counts
-    setElText("kpiActiveTickets", activeTickets);
-    setElText("kpiInProgressTickets", inProgressTickets);
+    setElText("kpiActiveTickets", activeTickets.toLocaleString("en-IN"));
+    setElText("kpiInProgressTickets", inProgressTickets.toLocaleString("en-IN"));
     setElText("bubbleActiveTickets", activeTickets);
     setElText("bubbleInProgressTickets", inProgressTickets);
 
-    // Home Pulse Cards (Port 3000 Theme)
-    setElText("homeTotalRecords", data.total_customers || "240");
-    setElText("homeActiveTickets", activeTickets);
-    setElText("homeInProgressTickets", inProgressTickets);
-    const resolvedPct = totalTickets > 0 ? `${Math.round((resolvedCases / totalTickets) * 100)}%` : "100%";
-    setElText("homeSolvedTickets", resolvedPct);
+    // Home Pulse Cards - Direct stable numbers (no continuous rolling)
+    setElText("homeTotalRecords", (data.total_customers != null ? data.total_customers : 240).toLocaleString("en-IN"));
+    setElText("homeActiveTickets", activeTickets.toLocaleString("en-IN"));
+    setElText("homeInProgressTickets", inProgressTickets.toLocaleString("en-IN"));
+    const resolvedPct = totalTickets > 0 ? Math.round((resolvedCases / totalTickets) * 100) : 100;
+    setElText("homeSolvedTickets", `${resolvedPct}%`);
 
     // Live Date on Hero Banner
     const heroDateEl = document.getElementById("heroLiveDate");
@@ -703,31 +719,127 @@ async function loadOverviewStats(isSilent = false, forceAnimate = false) {
 }
 
 // -------------------------------------------------------------
-// Animated Counter & Chart Visualizer Handlers
+// Counter & Text Handlers (Static, Solid Number Rendering)
 // -------------------------------------------------------------
-function animateCounter(element, startVal, endVal, durationMs = 800, prefix = '', suffix = '') {
+function animateCounter(elementOrId, startVal, endVal, durationMs = 0, prefix = '', suffix = '', isCurrency = false) {
+  const element = typeof elementOrId === "string" ? document.getElementById(elementOrId) : elementOrId;
   if (!element) return;
-  const startNum = parseFloat(startVal) || 0;
-  const endNum = parseFloat(endVal) || 0;
-  if (startNum === endNum) {
-    element.textContent = `${prefix}${endNum}${suffix}`;
+  const endNum = typeof endVal === "number" ? endVal : (parseFloat(String(endVal || 0).replace(/[^0-9.-]+/g, "")) || 0);
+  const formatted = isCurrency ? formatCurrency(endNum) : `${prefix}${endNum.toLocaleString("en-IN")}${suffix}`;
+  if (element.textContent !== formatted) {
+    element.textContent = formatted;
+  }
+}
+
+
+
+// Micro-Particle Confetti Celebration Engine
+let celebrationCanvas = null;
+let celebrationCtx = null;
+let celebrationParticles = [];
+let celebrationAnimId = null;
+
+function ensureCelebrationCanvas() {
+  if (!celebrationCanvas) {
+    celebrationCanvas = document.createElement('canvas');
+    celebrationCanvas.id = 'celebrationCanvas';
+    document.body.appendChild(celebrationCanvas);
+    celebrationCtx = celebrationCanvas.getContext('2d');
+    const resize = () => {
+      celebrationCanvas.width = window.innerWidth;
+      celebrationCanvas.height = window.innerHeight;
+    };
+    resize();
+    window.addEventListener('resize', resize);
+  }
+}
+
+function triggerCelebration(buttonEl, type = 'resolve') {
+  ensureCelebrationCanvas();
+  const rect = buttonEl ? buttonEl.getBoundingClientRect() : { left: window.innerWidth / 2, top: window.innerHeight / 2, width: 0, height: 0 };
+  const originX = rect.left + rect.width / 2;
+  const originY = rect.top + rect.height / 2;
+
+  // 1. Create expanding shield ripple
+  const ripple = document.createElement('div');
+  ripple.className = 'shield-ripple-effect';
+  ripple.style.left = `${originX}px`;
+  ripple.style.top = `${originY}px`;
+  if (type === 'freeze') {
+    ripple.style.boxShadow = '0 0 0 4px #ef4444, 0 0 30px #ef4444';
+  }
+  document.body.appendChild(ripple);
+  setTimeout(() => ripple.remove(), 800);
+
+  // 2. Spawn confetti particles
+  const colors = type === 'freeze' 
+    ? ['#f87171', '#ef4444', '#f87917', '#fbbf24', '#ffffff'] 
+    : ['#10b981', '#34d399', '#f87917', '#3b82f6', '#fbbf24', '#ffffff'];
+
+  for (let i = 0; i < 45; i++) {
+    const angle = Math.random() * Math.PI * 2;
+    const speed = 4 + Math.random() * 8;
+    celebrationParticles.push({
+      x: originX,
+      y: originY,
+      vx: Math.cos(angle) * speed,
+      vy: Math.sin(angle) * speed - 3,
+      size: 5 + Math.random() * 6,
+      color: colors[Math.floor(Math.random() * colors.length)],
+      alpha: 1,
+      rotation: Math.random() * 360,
+      vRot: (Math.random() - 0.5) * 12,
+      shape: Math.random() > 0.4 ? 'rect' : 'circle',
+      life: 0,
+      maxLife: 50 + Math.random() * 30
+    });
+  }
+
+  if (!celebrationAnimId) {
+    runCelebrationLoop();
+  }
+}
+
+function runCelebrationLoop() {
+  if (celebrationParticles.length === 0) {
+    if (celebrationCtx) celebrationCtx.clearRect(0, 0, celebrationCanvas.width, celebrationCanvas.height);
+    celebrationAnimId = null;
     return;
   }
-  const startTime = performance.now();
-  function step(now) {
-    const elapsed = now - startTime;
-    const progress = Math.min(elapsed / durationMs, 1);
-    // Smooth ease-out cubic
-    const ease = 1 - Math.pow(1 - progress, 3);
-    const current = Math.round(startNum + (endNum - startNum) * ease);
-    element.textContent = `${prefix}${current}${suffix}`;
-    if (progress < 1) {
-      requestAnimationFrame(step);
+
+  celebrationCtx.clearRect(0, 0, celebrationCanvas.width, celebrationCanvas.height);
+
+  for (let i = celebrationParticles.length - 1; i >= 0; i--) {
+    const p = celebrationParticles[i];
+    p.x += p.vx;
+    p.y += p.vy;
+    p.vy += 0.25; // gravity
+    p.vx *= 0.98;
+    p.rotation += p.vRot;
+    p.life++;
+    p.alpha = Math.max(0, 1 - (p.life / p.maxLife));
+
+    celebrationCtx.save();
+    celebrationCtx.translate(p.x, p.y);
+    celebrationCtx.rotate((p.rotation * Math.PI) / 180);
+    celebrationCtx.globalAlpha = p.alpha;
+    celebrationCtx.fillStyle = p.color;
+
+    if (p.shape === 'rect') {
+      celebrationCtx.fillRect(-p.size / 2, -p.size / 2, p.size, p.size * 0.6);
     } else {
-      element.textContent = `${prefix}${endNum}${suffix}`;
+      celebrationCtx.beginPath();
+      celebrationCtx.arc(0, 0, p.size / 2, 0, Math.PI * 2);
+      celebrationCtx.fill();
+    }
+    celebrationCtx.restore();
+
+    if (p.life >= p.maxLife || p.y > window.innerHeight + 50) {
+      celebrationParticles.splice(i, 1);
     }
   }
-  requestAnimationFrame(step);
+
+  celebrationAnimId = requestAnimationFrame(runCelebrationLoop);
 }
 
 function renderAnimatedRecoveryGauge(metricId, pctId, pct, forceAnimate = false) {
@@ -769,7 +881,7 @@ function renderAnimatedRecoveryGauge(metricId, pctId, pct, forceAnimate = false)
     }
     const valEl = document.getElementById(pctId);
     if (valEl) {
-      animateCounter(valEl, 0, pct, 800, '', '%');
+      valEl.textContent = `${pct}%`;
     }
   });
 }
@@ -868,7 +980,7 @@ function renderAnimatedDonutChart(containerId, forceAnimate = false) {
     });
     const totalEl = document.getElementById(`${containerId}_total_val`);
     if (totalEl) {
-      animateCounter(totalEl, 0, total, 800);
+      totalEl.textContent = String(total);
     }
   });
 }
@@ -974,6 +1086,8 @@ async function loadFraudTickets(isBackground = false) {
       const newArrivals = freshTickets.filter(t => !knownTicketIds.has(String(t.ticket_number || t.ticket_id)));
       
       if (newArrivals.length > 0) {
+        // Automatically reveal complaints view and sync when new complaints arrive from AutomationEdge or API
+        isComplaintsViewActive = true;
         newArrivals.forEach(t => {
           knownTicketIds.add(String(t.ticket_number || t.ticket_id));
           t.isNew = true;
@@ -1133,6 +1247,94 @@ function clearAllNotifs() {
   showToast("Notification inbox cleared", "info");
 }
 
+// -------------------------------------------------------------
+// Clear Filters & Clear Data Handlers
+// -------------------------------------------------------------
+let isComplaintsViewActive = false;
+
+async function fetchActiveComplaints() {
+  const btn = document.getElementById("btnLookForActiveComplaints");
+  const origHtml = btn ? btn.innerHTML : "";
+  if (btn) {
+    btn.disabled = true;
+    btn.innerHTML = `<i class="fa-solid fa-spinner fa-spin"></i> Checking Database...`;
+  }
+
+  try {
+    const res = await fetch("/api/fraud-tickets/look-for-active", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" }
+    });
+
+    if (!res.ok) {
+      throw new Error(`Server returned HTTP ${res.status}`);
+    }
+
+    const data = await res.json();
+    isComplaintsViewActive = true;
+
+    if (Array.isArray(data.tickets)) {
+      allTickets = data.tickets;
+      data.tickets.forEach(t => knownTicketIds.add(String(t.ticket_number || t.ticket_id)));
+      try {
+        sessionStorage.setItem("known_ticket_ids", JSON.stringify(Array.from(knownTicketIds)));
+      } catch (e) {}
+    } else {
+      await loadFraudTickets(true);
+    }
+
+    ticketCurrentPage = 1;
+    applyFilters();
+    loadOverviewStats(false, true);
+
+    if (data.seeded && data.seeded_count > 0) {
+      showToast(`⚡ Generated & added ${data.seeded_count} random complaints to PostgreSQL database!`, "success");
+    } else {
+      const activeCount = allTickets.filter(t => t.status !== 'RESOLVED').length;
+      showToast(`Loaded ${activeCount} active customer complaints from database`, "success");
+    }
+  } catch (err) {
+    console.error("fetchActiveComplaints error:", err);
+    // Graceful fallback to existing loadFraudTickets
+    isComplaintsViewActive = true;
+    await loadFraudTickets(true);
+    ticketCurrentPage = 1;
+    applyFilters();
+    showToast("Active customer complaints loaded", "info");
+  } finally {
+    if (btn) {
+      btn.disabled = false;
+      btn.innerHTML = origHtml;
+    }
+  }
+}
+
+window.fetchActiveComplaints = fetchActiveComplaints;
+
+function clearComplaintsUI() {
+  isComplaintsViewActive = false;
+  selectedTicketIds.clear();
+  updateBulkActionBar();
+  applyFilters();
+  showToast("Complaints cleared from UI view (data kept in backend DB)", "info");
+}
+
+function clearFilters() {
+  const searchInput = document.getElementById("ticketSearchInput");
+  const sevFilter = document.getElementById("filterSeverity");
+  const statusFilter = document.getElementById("filterStatus");
+  const typeFilter = document.getElementById("filterIncidentType");
+
+  if (searchInput) searchInput.value = "";
+  if (sevFilter) sevFilter.value = "ALL";
+  if (statusFilter) statusFilter.value = "ALL";
+  if (typeFilter) typeFilter.value = "ALL";
+
+  ticketCurrentPage = 1;
+  applyFilters();
+  showToast("Filters reset — showing all active complaints", "info");
+}
+
 function applyFilters() {
   const searchTerm = document.getElementById("ticketSearchInput").value.trim().toLowerCase();
   const severityFilter = document.getElementById("filterSeverity").value;
@@ -1169,6 +1371,11 @@ function applyFilters() {
   if (badgeTicketCount && badgeTicketCount.textContent !== String(activeTicketsPool.length)) {
     badgeTicketCount.textContent = String(activeTicketsPool.length);
   }
+
+  // Toggle inline quick clear button if any filter is active
+  const isFilterActive = !!searchTerm || severityFilter !== "ALL" || statusFilter !== "ALL" || typeFilter !== "ALL";
+  const quickClear = document.getElementById("btnQuickClearFilters");
+  if (quickClear) quickClear.style.display = isFilterActive ? "inline-flex" : "none";
 
   renderFraudTicketsTable(filteredTickets);
   updatePillCounts();
@@ -1312,7 +1519,40 @@ function exportSolvedCSV() {
 
 function renderFraudTicketsTable(tickets) {
   const tbody = document.getElementById("fraudTicketsTableBody");
-  document.getElementById("visibleTicketCount").textContent = tickets.length;
+  const countEl = document.getElementById("visibleTicketCount");
+  const paginationEl = document.getElementById("ticketsPagination");
+
+  if (!isComplaintsViewActive) {
+    if (countEl) countEl.textContent = "0";
+    if (paginationEl) paginationEl.innerHTML = "";
+    const selectAllCheckbox = document.getElementById("selectAllTicketsCheckbox");
+    if (selectAllCheckbox) {
+      selectAllCheckbox.checked = false;
+      selectAllCheckbox.indeterminate = false;
+    }
+
+    tbody.innerHTML = `
+      <tr>
+        <td colspan="8" style="padding: 55px 20px; text-align: center; background: #ffffff;">
+          <div style="display: flex; flex-direction: column; align-items: center; justify-content: center; max-width: 480px; margin: 0 auto; gap: 14px;">
+            <div style="width: 56px; height: 56px; border-radius: 50%; background: #fff7ed; color: #ea580c; display: flex; align-items: center; justify-content: center; font-size: 22px; box-shadow: 0 4px 14px rgba(234, 88, 12, 0.12); border: 1px solid #fed7aa;">
+              <i class="fa-solid fa-clipboard-list"></i>
+            </div>
+            <div>
+              <h3 style="font-size: 16.5px; font-weight: 700; color: #0f172a; margin: 0 0 5px 0;">Active Complaints Queue</h3>
+              <p style="font-size: 13px; color: #64748b; margin: 0; line-height: 1.5;">Click below to look for and display all active customer fraud complaints from the database.</p>
+            </div>
+            <button type="button" class="btn btn-primary" id="btnLookForActiveComplaints" onclick="fetchActiveComplaints()" style="padding: 9px 22px; font-size: 13px; font-weight: 700; background: linear-gradient(135deg, #fd8f3a 0%, #f87917 100%); color: #ffffff; border: none; border-radius: 8px; cursor: pointer; display: inline-flex; align-items: center; gap: 8px; box-shadow: 0 4px 14px rgba(248, 121, 23, 0.25);">
+              <i class="fa-solid fa-magnifying-glass"></i> Look for Active Complaints
+            </button>
+          </div>
+        </td>
+      </tr>
+    `;
+    return;
+  }
+
+  if (countEl) countEl.textContent = tickets.length;
 
   if (tickets.length === 0) {
     tbody.innerHTML = `<tr><td colspan="8" class="loading-state">No fraud tickets match your current filters.</td></tr>`;
@@ -1820,6 +2060,7 @@ async function handleFreezeAction() {
     });
     const data = await res.json();
     if (data.success) {
+      triggerCelebration(document.getElementById("btnDrawerFreeze"), 'freeze');
       currentDossierTicket.status = "FROZEN";
       currentDossierTicket.account_status = "FROZEN";
       allTickets.forEach(t => {
@@ -1920,6 +2161,9 @@ async function handleStatusUpdate(newStatus) {
     }
     const data = await res.json();
     if (data.success) {
+      if (newStatus === "RESOLVED") {
+        triggerCelebration(document.getElementById("btnDrawerResolve"), 'resolve');
+      }
       currentDossierTicket.status = newStatus;
       allTickets.forEach(t => {
         if (String(t.ticket_id) === String(ticketId) || t.ticket_number === ticketNum) {
@@ -2195,6 +2439,7 @@ async function handleCreateNewTicket(e) {
     if (data.success || data.ticket_number || data.ticket_id) {
       const tNum = data.ticket_number || "FRD-2026-NEW";
       showToast(`Complaint ${tNum} created in PostgreSQL & assigned to ${staffAssignee}!`, "success");
+      isComplaintsViewActive = true;
       document.getElementById("newTicketModal")?.classList.remove("open");
       document.getElementById("newFraudTicketForm")?.reset();
       updatePresetPriority();

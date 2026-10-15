@@ -226,13 +226,13 @@ app.post('/api/auth/login', async (req, res) => {
 
       // Demo fallback if user record isn't in DB yet
       if (!user) {
-        if (uInput.includes('pooja') || uInput.includes('automationedge')) {
+        if (uInput.includes('andrew') || uInput.includes('pooja') || uInput.includes('automationedge')) {
           user = {
             user_id: 101,
-            username: 'pooja.deshmukh',
-            full_name: 'Pooja Deshmukh',
+            username: 'andrew',
+            full_name: 'Andrew',
             role: 'SOC_ANALYST',
-            email: 'pooja.deshmukh@automationedge.ai',
+            email: 'andrew@automationedge.ai',
             department: 'SOC Operations',
             is_active: true,
             password_hash: pHash,
@@ -912,6 +912,187 @@ app.post('/api/fraud-tickets/bulk-delete', async (req, res) => {
         success: true,
         deleted_count: delRes.rows.length,
         message: `Deleted ${delRes.rows.length} complaints.`
+      });
+    } finally {
+      client.release();
+    }
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Clear all customer fraud complaints (Purge Data)
+app.all(['/api/fraud-tickets/clear-all', '/api/fraud-tickets/clear'], async (req, res) => {
+  try {
+    const client = await pool.connect();
+    try {
+      const delRes = await client.query('DELETE FROM fraud_tickets RETURNING ticket_id, ticket_number;');
+      const clientIp = req.ip || req.connection.remoteAddress || '127.0.0.1';
+      const actor = req.headers['x-user-name'] || DEFAULT_INVESTIGATOR;
+
+      try {
+        await client.query(`
+          INSERT INTO audit_logs (ticket_number, customer_name, actor, action, details, ip_address)
+          VALUES ($1, $2, $3, $4, $5, $6);
+        `, ['ALL_CLEARED', 'ALL_CUSTOMERS', actor, 'ALL_COMPLAINTS_CLEARED', `Cleared ${delRes.rows.length} complaints from database.`, clientIp]);
+      } catch (e) {}
+
+      res.json({
+        success: true,
+        deleted_count: delRes.rows.length,
+        message: `Successfully cleared ${delRes.rows.length} customer fraud complaints.`
+      });
+    } finally {
+      client.release();
+    }
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Sample fraud complaint templates for random trigger
+const SAMPLE_FRAUD_TEMPLATES = [
+  {
+    customer_name: "Pooja Hegde",
+    account_number: "ACT-2011-2288",
+    incident_type: "Cryptocurrency Investment WhatsApp Pump & Dump",
+    amount_involved: 310000.00,
+    severity: "CRITICAL",
+    reported_channel: "Fraud Hotline",
+    suspect_entity: "BitForex Asia Ltd (Unregulated)",
+    description: "Unauthorized crypto futures arbitrage platform drained customer account via repeated UPI pull mandates."
+  },
+  {
+    customer_name: "Rameshwar Kulkarni",
+    account_number: "ACT-1788-9955",
+    incident_type: "Fake Part-time Job WhatsApp Review Scam",
+    amount_involved: 62000.00,
+    severity: "HIGH",
+    reported_channel: "NetBanking Alert",
+    suspect_entity: "Telegram Bot 'HotelReviewMediaJob'",
+    description: "Paid small commissions initially, then demanded ₹62,000 security deposit for premium freelance tasks."
+  },
+  {
+    customer_name: "Harishankar Pandey",
+    account_number: "ACT-1344-5511",
+    incident_type: "Fake Instant Personal Loan App Data Extortion",
+    amount_involved: 35000.00,
+    severity: "HIGH",
+    reported_channel: "Customer Help Desk",
+    suspect_entity: "QuickRupee APK 2026",
+    description: "Malicious APK scraped contact list and harassed customer demanding ₹35,000 for an unrequested 7-day loan."
+  },
+  {
+    customer_name: "Siddharth Rao",
+    account_number: "ACT-1122-3399",
+    incident_type: "Digital Arrest Extortion (Fake CBI / Police Video Call)",
+    amount_involved: 250000.00,
+    severity: "CRITICAL",
+    reported_channel: "Branch Manager Escalation",
+    suspect_entity: "Skype ID 'CyberCrimeHQ_Mumbai'",
+    description: "Extortionists posing as CBI officers conducted a 4-hour fake video court hearing demanding RTGS clearance transfer."
+  },
+  {
+    customer_name: "Farhan Qureshi",
+    account_number: "ACT-8899-0066",
+    incident_type: "Fake Stock Trading App IPO Allocation Scam",
+    amount_involved: 520000.00,
+    severity: "CRITICAL",
+    reported_channel: "Customer Help Desk",
+    suspect_entity: "Telegram Group 'Apex VIP Wealth'",
+    description: "Victim lured into fictitious SEBI-approved pre-IPO allocation pool via WhatsApp advisory group."
+  },
+  {
+    customer_name: "Deepak Choudhury",
+    account_number: "ACT-7788-9955",
+    incident_type: "Fake Bank KYC Update Phishing APK",
+    amount_involved: 56000.00,
+    severity: "HIGH",
+    reported_channel: "SMS Phishing Report",
+    suspect_entity: "BankUpdateNet.apk",
+    description: "Customer downloaded malicious SMS APK which forwarded OTPs and initiated unauthorized fund transfer."
+  },
+  {
+    customer_name: "Ananya Sen",
+    account_number: "ACT-4455-6622",
+    incident_type: "Fake Work-From-Home Telegram Task Scam",
+    amount_involved: 75000.00,
+    severity: "HIGH",
+    reported_channel: "Mobile App Alert",
+    suspect_entity: "TaskMaster Pro Global",
+    description: "Prepaid rating task scam where victim was forced to deposit funds to unlock previously earned commissions."
+  },
+  {
+    customer_name: "Kavita Krishnamurthy",
+    account_number: "ACT-2244-8812",
+    incident_type: "SIM Swap & NetBanking Hijacking",
+    amount_involved: 185000.00,
+    severity: "CRITICAL",
+    reported_channel: "Customer Helpline",
+    suspect_entity: "eSIM Activation Phish Portal",
+    description: "Victim received fraudulent SMS to update SIM KYC; line deactivated and 3 unauthorized IMPS transfers occurred."
+  }
+];
+
+// Look for Active Complaints - Seeds 5 random complaints if database is empty
+app.all(['/api/fraud-tickets/look-for-active', '/api/fraud-tickets/seed-random-five'], async (req, res) => {
+  try {
+    const client = await pool.connect();
+    try {
+      const countRes = await client.query("SELECT COUNT(*) AS total FROM fraud_tickets WHERE status != 'RESOLVED';");
+      const currentActiveCount = parseInt(countRes.rows[0].total, 10);
+
+      let seededCount = 0;
+      if (currentActiveCount === 0) {
+        // Query existing customers to link valid customer_id
+        const custRes = await client.query('SELECT customer_id, customer_name, account_number FROM customer_accounts LIMIT 20;');
+        const availableCusts = custRes.rows;
+
+        // Shuffle and pick 5 random templates
+        const shuffled = [...SAMPLE_FRAUD_TEMPLATES].sort(() => 0.5 - Math.random()).slice(0, 5);
+
+        for (let i = 0; i < shuffled.length; i++) {
+          const t = shuffled[i];
+          const linkedCust = availableCusts.length > 0 ? availableCusts[i % availableCusts.length] : null;
+          const custId = linkedCust ? linkedCust.customer_id : null;
+          const custName = linkedCust ? linkedCust.customer_name : t.customer_name;
+          const accNum = linkedCust ? linkedCust.account_number : t.account_number;
+          const tNum = `FRD-2026-${Math.floor(9200 + Math.random() * 700)}`;
+
+          await client.query(`
+            INSERT INTO fraud_tickets (
+              ticket_number, customer_id, customer_name, account_number, incident_type,
+              amount_involved, recovered_amount, incident_date, reported_channel,
+              severity, status, assigned_investigator, suspect_entity, description, action_taken
+            ) VALUES ($1, $2, $3, $4, $5, $6, $7, CURRENT_TIMESTAMP - ($8 || ' minutes')::INTERVAL, $9, $10, $11, $12, $13, $14, $15)
+            ON CONFLICT (ticket_number) DO NOTHING;
+          `, [
+            tNum, custId, custName, accNum, t.incident_type,
+            t.amount_involved, 0.0, (i * 15 + 5), t.reported_channel,
+            t.severity, 'UNDER_INVESTIGATION', 'Andrew (SOC Operations)',
+            t.suspect_entity, t.description, 'Complaint ingested into SOC queue.'
+          ]);
+
+          seededCount++;
+        }
+      }
+
+      // Fetch fresh active tickets list
+      const freshRes = await client.query(`
+        SELECT ticket_id, ticket_number, customer_id, customer_name, customer_name AS full_name,
+               account_number, incident_type, amount_involved, recovered_amount,
+               incident_date, reported_channel, severity, status, assigned_investigator,
+               suspect_entity, description, action_taken, created_at, updated_at
+        FROM fraud_tickets
+        WHERE status != 'RESOLVED'
+        ORDER BY incident_date DESC;
+      `);
+
+      res.json({
+        success: true,
+        seeded: seededCount > 0,
+        seeded_count: seededCount,
+        tickets: freshRes.rows
       });
     } finally {
       client.release();

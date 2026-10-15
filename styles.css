@@ -2787,6 +2787,12 @@ body.sidebar-closed .portal-sidebar,
   flex-wrap: wrap;
   position: relative;
   overflow: hidden;
+  transform: none !important;
+  transition: none !important;
+}
+
+.home-hero-card:hover {
+  transform: none !important;
 }
 
 .home-hero-card::after {
@@ -3891,4 +3897,137 @@ body.sidebar-closed .portal-sidebar,
   background: #fee2e2;
   color: #ef4444;
   transform: translateX(1px);
+}
+
+/* ==========================================================
+   VISUAL POLISH ENHANCEMENTS (3D Tilt, Celebration)
+   ========================================================== */
+
+/* 1. 3D Interactive Tilt & Ambient Glare Sheen */
+.home-pulse-card, .kpi-card, .dash-card {
+  position: relative;
+  transition: box-shadow 0.25s ease,
+              border-color 0.25s ease;
+}
+
+.home-pulse-card::after, .kpi-card::after, .dash-card::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  background: radial-gradient(circle 140px at var(--glare-x, 50%) var(--glare-y, 50%), rgba(255, 255, 255, 0.4), transparent 75%);
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.3s ease;
+  z-index: 2;
+}
+
+.home-pulse-card:hover::after, .kpi-card:hover::after, .dash-card:hover::after {
+  opacity: 1;
+}
+
+/* 3. Celebration Canvas & Shield Ripple */
+#celebrationCanvas {
+  position: fixed;
+  inset: 0;
+  width: 100vw;
+  height: 100vh;
+  pointer-events: none;
+  z-index: 99999;
+}
+
+.shield-ripple-effect {
+  position: fixed;
+  border-radius: 50%;
+  pointer-events: none;
+  z-index: 99998;
+  animation: shieldRippleAnim 0.75s cubic-bezier(0.1, 0.8, 0.3, 1) forwards;
+}
+
+@keyframes shieldRippleAnim {
+  0% {
+    width: 0;
+    height: 0;
+    opacity: 0.85;
+    transform: translate(-50%, -50%) scale(0.2);
+    box-shadow: 0 0 0 4px #10b981, 0 0 30px #10b981;
+  }
+  100% {
+    width: 320px;
+    height: 320px;
+    opacity: 0;
+    transform: translate(-50%, -50%) scale(1);
+    box-shadow: 0 0 0 1px #10b981, 0 0 60px rgba(16, 185, 129, 0.2);
+  }
+}
+
+/* Clear Data & Reset Filter Buttons */
+.btn-danger-outline {
+  background: #ffffff;
+  border: 1px solid #fecaca;
+  color: #dc2626;
+  font-weight: 600;
+  transition: all 0.2s ease;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.btn-danger-outline:hover {
+  background: #fef2f2;
+  border-color: #ef4444;
+  color: #b91c1c;
+  box-shadow: 0 2px 8px rgba(239, 68, 68, 0.15);
+}
+
+.btn-clear-data {
+  background: #ffffff;
+  border: 1px solid #fca5a5;
+  color: #dc2626;
+  font-weight: 600;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  border-radius: 6px;
+  padding: 4px 10px;
+  font-size: 11.5px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.btn-clear-data:hover {
+  background: #dc2626;
+  color: #ffffff;
+  border-color: #dc2626;
+  box-shadow: 0 2px 6px rgba(220, 38, 38, 0.25);
+  transform: translateY(-1px);
+}
+
+.btn-clear-filters {
+  height: 38px;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.btn-link-clear {
+  font-size: 11.5px;
+  font-weight: 600;
+  color: #ea580c;
+  background: #fff7ed;
+  border: 1px solid #fed7aa;
+  border-radius: 4px;
+  padding: 2px 8px;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  transition: all 0.18s ease;
+}
+
+.btn-link-clear:hover {
+  background: #ffedd5;
+  color: #c2410c;
 }

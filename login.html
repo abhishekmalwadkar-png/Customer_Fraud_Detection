@@ -389,7 +389,7 @@
     <form id="staffLoginForm" autocomplete="on">
       <div class="form-group">
         <input type="text" id="usernameInput" class="form-control" placeholder="Email or Username"
-          value="pooja.deshmukh@automationedge.ai" required autofocus>
+          value="andrew@automationedge.ai" required autofocus>
       </div>
 
       <div class="form-group" style="position: relative;">
@@ -429,7 +429,7 @@
       const pwdEyeIcon = document.getElementById("pwdEyeIcon");
 
       // Ensure default prefilled values
-      usernameInput.value = "pooja.deshmukh@automationedge.ai";
+      usernameInput.value = "andrew@automationedge.ai";
       passwordInput.value = "Password@123";
 
       // Show/Hide Password
@@ -444,17 +444,17 @@
         e.preventDefault();
         let u = usernameInput.value.trim();
         let p = passwordInput.value.trim();
-        if (!u) u = "pooja.deshmukh@automationedge.ai";
+        if (!u) u = "andrew@automationedge.ai";
         if (!p) p = "Password@123";
-        if (u === "pooja.deshmukh@automationedge." || u === "pooja.deshmukh@automationedge") {
-          u = "pooja.deshmukh@automationedge.ai";
+        if (u === "andrew@automationedge." || u === "andrew@automationedge") {
+          u = "andrew@automationedge.ai";
           usernameInput.value = u;
         }
         performLogin(u, p);
       });
 
       async function performLogin(username, password) {
-        if (!username) username = "pooja.deshmukh@automationedge.ai";
+        if (!username) username = "andrew@automationedge.ai";
         if (!password) password = "Password@123";
 
         hideAlert();
@@ -486,6 +486,7 @@
           if (
             password === "Password@123" || 
             password === "admin" || 
+            lowerUser.includes("andrew") || 
             lowerUser.includes("pooja") || 
             lowerUser.includes("automationedge") || 
             lowerUser.includes("investigator") || 
@@ -493,10 +494,10 @@
           ) {
             userObj = {
               user_id: 101,
-              username: "pooja.deshmukh",
-              full_name: "Pooja Deshmukh",
+              username: "andrew",
+              full_name: "Andrew",
               role: "SOC_ANALYST",
-              email: "pooja.deshmukh@automationedge.ai",
+              email: "andrew@automationedge.ai",
               department: "SOC Operations"
             };
             token = "stf_demo_" + Date.now();

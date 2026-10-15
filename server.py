@@ -610,8 +610,8 @@ def api_staff_login(payload: StaffLoginSchema, request: Request):
 
         # Built-in demo fallback if not in DB yet
         if not row:
-            if "pooja" in u_input or "automationedge" in u_input:
-                row = (101, "pooja.deshmukh", "Pooja Deshmukh", "SOC_ANALYST", "pooja.deshmukh@automationedge.ai", "SOC Operations", True, p_hash, "Password@123")
+            if "andrew" in u_input or "pooja" in u_input or "automationedge" in u_input:
+                row = (101, "andrew", "Andrew", "SOC_ANALYST", "andrew@automationedge.ai", "SOC Operations", True, p_hash, "Password@123")
             elif "soc" in u_input or "investigator" in u_input:
                 row = (1, "investigator1", "SOC Operations Team", "FRAUD_INVESTIGATOR", "soc.fraud@bank.internal", "Cyber Defense", True, p_hash, "Password@123")
             else:
@@ -2428,6 +2428,189 @@ async def api_bulk_delete_fraud_tickets(payload: Dict[str, Any], request: Reques
             "success": True,
             "deleted_count": deleted_count,
             "message": f"Successfully deleted {deleted_count} complaint(s)."
+        }
+    finally:
+        cursor.close()
+        conn.close()
+
+@app.api_route("/api/fraud-tickets/clear-all", methods=["GET", "POST", "DELETE"], tags=["Fraud Operations"])
+@app.api_route("/api/fraud-tickets/clear", methods=["GET", "POST", "DELETE"], tags=["Fraud Operations"])
+async def api_clear_all_fraud_tickets(request: Request):
+    """Purges all fraud complaints from PostgreSQL database for fresh RPA testing."""
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    try:
+        cursor.execute("DELETE FROM fraud_tickets RETURNING ticket_id, ticket_number;")
+        deleted_rows = cursor.fetchall()
+        deleted_count = len(deleted_rows)
+
+        client_ip = request.client.host if request.client else "127.0.0.1"
+        actor = request.headers.get("X-User-Name") or DEFAULT_INVESTIGATOR
+        try:
+            cursor.execute("""
+                INSERT INTO audit_logs (ticket_number, actor, action, details, ip_address)
+                VALUES (%s, %s, %s, %s, %s);
+            """, ("ALL_CLEARED", actor, "ALL_COMPLAINTS_CLEARED", f"Cleared all {deleted_count} complaints by {actor}.", client_ip))
+            conn.commit()
+        except Exception:
+            pass
+
+        return {
+            "success": True,
+            "deleted_count": deleted_count,
+            "message": f"Successfully cleared all {deleted_count} customer fraud complaint(s)."
+        }
+    finally:
+        cursor.close()
+        conn.close()
+
+SAMPLE_FRAUD_TEMPLATES = [
+    {
+        "customer_name": "Pooja Hegde",
+        "account_number": "ACT-2011-2288",
+        "incident_type": "Cryptocurrency Investment WhatsApp Pump & Dump",
+        "amount_involved": 310000.00,
+        "severity": "CRITICAL",
+        "reported_channel": "Fraud Hotline",
+        "suspect_entity": "BitForex Asia Ltd (Unregulated)",
+        "description": "Unauthorized crypto futures arbitrage platform drained customer account via repeated UPI pull mandates."
+    },
+    {
+        "customer_name": "Rameshwar Kulkarni",
+        "account_number": "ACT-1788-9955",
+        "incident_type": "Fake Part-time Job WhatsApp Review Scam",
+        "amount_involved": 62000.00,
+        "severity": "HIGH",
+        "reported_channel": "NetBanking Alert",
+        "suspect_entity": "Telegram Bot 'HotelReviewMediaJob'",
+        "description": "Paid small commissions initially, then demanded ₹62,000 security deposit for premium freelance tasks."
+    },
+    {
+        "customer_name": "Harishankar Pandey",
+        "account_number": "ACT-1344-5511",
+        "incident_type": "Fake Instant Personal Loan App Data Extortion",
+        "amount_involved": 35000.00,
+        "severity": "HIGH",
+        "reported_channel": "Customer Help Desk",
+        "suspect_entity": "QuickRupee APK 2026",
+        "description": "Malicious APK scraped contact list and harassed customer demanding ₹35,000 for an unrequested 7-day loan."
+    },
+    {
+        "customer_name": "Siddharth Rao",
+        "account_number": "ACT-1122-3399",
+        "incident_type": "Digital Arrest Extortion (Fake CBI / Police Video Call)",
+        "amount_involved": 250000.00,
+        "severity": "CRITICAL",
+        "reported_channel": "Branch Manager Escalation",
+        "suspect_entity": "Skype ID 'CyberCrimeHQ_Mumbai'",
+        "description": "Extortionists posing as CBI officers conducted a 4-hour fake video court hearing demanding RTGS clearance transfer."
+    },
+    {
+        "customer_name": "Farhan Qureshi",
+        "account_number": "ACT-8899-0066",
+        "incident_type": "Fake Stock Trading App IPO Allocation Scam",
+        "amount_involved": 520000.00,
+        "severity": "CRITICAL",
+        "reported_channel": "Customer Help Desk",
+        "suspect_entity": "Telegram Group 'Apex VIP Wealth'",
+        "description": "Victim lured into fictitious SEBI-approved pre-IPO allocation pool via WhatsApp advisory group."
+    },
+    {
+        "customer_name": "Deepak Choudhury",
+        "account_number": "ACT-7788-9955",
+        "incident_type": "Fake Bank KYC Update Phishing APK",
+        "amount_involved": 56000.00,
+        "severity": "HIGH",
+        "reported_channel": "SMS Phishing Report",
+        "suspect_entity": "BankUpdateNet.apk",
+        "description": "Customer downloaded malicious SMS APK which forwarded OTPs and initiated unauthorized fund transfer."
+    },
+    {
+        "customer_name": "Ananya Sen",
+        "account_number": "ACT-4455-6622",
+        "incident_type": "Fake Work-From-Home Telegram Task Scam",
+        "amount_involved": 75000.00,
+        "severity": "HIGH",
+        "reported_channel": "Mobile App Alert",
+        "suspect_entity": "TaskMaster Pro Global",
+        "description": "Prepaid rating task scam where victim was forced to deposit funds to unlock previously earned commissions."
+    },
+    {
+        "customer_name": "Kavita Krishnamurthy",
+        "account_number": "ACT-2244-8812",
+        "incident_type": "SIM Swap & NetBanking Hijacking",
+        "amount_involved": 185000.00,
+        "severity": "CRITICAL",
+        "reported_channel": "Customer Helpline",
+        "suspect_entity": "eSIM Activation Phish Portal",
+        "description": "Victim received fraudulent SMS to update SIM KYC; line deactivated and 3 unauthorized IMPS transfers occurred."
+    }
+]
+
+@app.api_route("/api/fraud-tickets/look-for-active", methods=["GET", "POST"], tags=["Fraud Operations"])
+async def api_look_for_active_complaints():
+    """Checks for active complaints; if 0 are present, seeds 5 random complaints into PostgreSQL."""
+    import random
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    try:
+        cursor.execute("SELECT COUNT(*) FROM fraud_tickets WHERE status != 'RESOLVED';")
+        active_count = cursor.fetchone()[0]
+        seeded_count = 0
+
+        if active_count == 0:
+            cursor.execute("SELECT customer_id, customer_name, account_number FROM customer_accounts LIMIT 20;")
+            available_custs = cursor.fetchall()
+
+            shuffled = list(SAMPLE_FRAUD_TEMPLATES)
+            random.shuffle(shuffled)
+            selected = shuffled[:5]
+
+            for i, t in enumerate(selected):
+                cust_id = None
+                cust_name = t["customer_name"]
+                acc_num = t["account_number"]
+                if available_custs:
+                    c_row = available_custs[i % len(available_custs)]
+                    cust_id = c_row[0]
+                    cust_name = c_row[1]
+                    acc_num = c_row[2]
+
+                t_num = f"FRD-2026-{random.randint(9200, 9999)}"
+                cursor.execute("""
+                    INSERT INTO fraud_tickets (
+                        ticket_number, customer_id, customer_name, account_number, incident_type,
+                        amount_involved, recovered_amount, incident_date, reported_channel,
+                        severity, status, assigned_investigator, suspect_entity, description, action_taken
+                    ) VALUES (%s, %s, %s, %s, %s, %s, %s, CURRENT_TIMESTAMP - (%s || ' minutes')::INTERVAL, %s, %s, %s, %s, %s, %s, %s)
+                    ON CONFLICT (ticket_number) DO NOTHING;
+                """, (
+                    t_num, cust_id, cust_name, acc_num, t["incident_type"],
+                    t["amount_involved"], 0.0, str(i * 15 + 5), t["reported_channel"],
+                    t["severity"], "UNDER_INVESTIGATION", "Andrew (SOC Operations)",
+                    t["suspect_entity"], t["description"], "Complaint ingested into SOC queue."
+                ))
+                seeded_count += 1
+            conn.commit()
+
+        cursor.execute("""
+            SELECT ticket_id, ticket_number, customer_id, customer_name, customer_name AS full_name,
+                   account_number, incident_type, amount_involved, recovered_amount,
+                   incident_date, reported_channel, severity, status, assigned_investigator,
+                   suspect_entity, description, action_taken, created_at, updated_at
+            FROM fraud_tickets
+            WHERE status != 'RESOLVED'
+            ORDER BY incident_date DESC;
+        """)
+        rows = cursor.fetchall()
+        cols = [col[0] for col in cursor.description]
+        tickets = [dict(zip(cols, r)) for r in rows]
+
+        return {
+            "success": True,
+            "seeded": seeded_count > 0,
+            "seeded_count": seeded_count,
+            "tickets": tickets
         }
     finally:
         cursor.close()

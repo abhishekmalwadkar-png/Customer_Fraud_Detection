@@ -41,11 +41,6 @@
         <span id="clockValue">--:--:--</span>
       </div>
 
-      <button class="btn" id="btnHeaderNewFraud" onclick="openNewComplaintModal()" style="background: linear-gradient(135deg, #fd8f3a 0%, #f87917 100%); color: #1c1f2a; font-weight: 700; border: none; padding: 7px 14px; border-radius: 8px; font-size: 12.5px; display: inline-flex; align-items: center; gap: 6px;">
-        <i class="fa-solid fa-plus"></i>
-        <span>New Complaint</span>
-      </button>
-
       <!-- Notification Bell -->
       <div class="header-notif-wrapper" id="notifWrapper">
         <button class="header-bell-btn" id="btnNotificationBell" title="Live Fraud Notifications" aria-label="Notifications">
@@ -125,10 +120,10 @@
       <div class="sidebar-user-card">
         <div class="sidebar-user-pill">
           <div class="sidebar-user-left">
-            <div class="sidebar-avatar-box" id="headerUserAvatar">VM</div>
+            <div class="sidebar-avatar-box" id="headerUserAvatar">A</div>
             <div class="sidebar-user-meta">
-              <span class="sidebar-user-name" id="headerUserName">Vikram Malhotra</span>
-              <span class="sidebar-user-role" id="headerUserRole">Fraud Operations</span>
+              <span class="sidebar-user-name" id="headerUserName">Andrew</span>
+              <span class="sidebar-user-role" id="headerUserRole">SOC Operations</span>
             </div>
           </div>
           <button class="btn-sidebar-logout" id="btnLogoutHeader" title="Sign Out from Portal" aria-label="Sign Out">
@@ -322,6 +317,7 @@
           <div class="panel-actions">
             <button class="btn btn-outline" id="btnRefreshTickets"><i class="fa-solid fa-rotate"></i> Refresh</button>
             <button class="btn btn-outline" id="btnExportTicketsCSV"><i class="fa-solid fa-download"></i> Download Excel / CSV</button>
+            <button class="btn btn-danger-outline" id="btnClearDataHeader" title="Permanently clear all customer complaints data"><i class="fa-solid fa-trash-can"></i> Clear Data</button>
           </div>
         </div>
 
@@ -366,17 +362,23 @@
                 <option value="QR">Fake QR Code Scam</option>
               </select>
             </div>
+
+            <div class="filter-item" style="justify-content: flex-end;">
+              <label style="visibility: hidden;">Reset</label>
+              <button class="btn btn-outline btn-sm btn-clear-filters" id="btnClearFilters" title="Reset all search queries and filters">
+                <i class="fa-solid fa-filter-circle-xmark"></i> Clear Filters
+              </button>
+            </div>
           </div>
         </div>
 
-        <!-- Results Counter & Quick Pills -->
+        <!-- Results Counter & Quick Filters -->
         <div class="results-meta-bar">
-          <div>Showing <strong id="visibleTicketCount">0</strong> customer complaints</div>
-          <div class="severity-quick-stats">
-            <span class="tag-pill tag-critical" id="pillCritCount">0 Urgent</span>
-            <span class="tag-pill tag-high" id="pillHighCount">0 High</span>
-            <span class="tag-pill tag-medium" id="pillMedCount">0 Medium</span>
-            <span class="tag-pill tag-resolved" id="pillResCount">0 Solved</span>
+          <div style="display: flex; align-items: center; gap: 10px;">
+            <div>Showing <strong id="visibleTicketCount">0</strong> customer complaints</div>
+            <button class="btn-link-clear" id="btnQuickClearFilters" style="display: none;" title="Reset filters">
+              <i class="fa-solid fa-xmark"></i> Clear filters
+            </button>
           </div>
         </div>
 
@@ -469,23 +471,7 @@
             <h1 class="panel-title">Fraud Operations Summary</h1>
             <p class="panel-subtitle">Executive overview of all customer complaints, financial exposure, recovered funds, and active threats.</p>
           </div>
-          <div class="panel-actions">
-            <!-- Active Tickets Bubble -->
-            <div class="summary-status-bubble bubble-active" id="bubbleActiveContainer" title="All active unresolved complaints">
-              <span class="status-pulse blue"></span>
-              <i class="fa-solid fa-bolt"></i>
-              <span>Active Complaints: <strong id="bubbleActiveTickets">0</strong></span>
-            </div>
-
-            <!-- In Progress Tickets Bubble -->
-            <div class="summary-status-bubble bubble-progress" id="bubbleProgressContainer" title="Complaints currently under investigation">
-              <span class="status-pulse amber"></span>
-              <i class="fa-solid fa-clock-rotate-left"></i>
-              <span>In Progress: <strong id="bubbleInProgressTickets">0</strong></span>
-            </div>
-
-            <span class="live-dot-label"><span class="status-pulse green"></span> System Live</span>
-          </div>
+          <div class="panel-actions"></div>
         </div>
 
         <!-- Executive Summary KPI Metric Cards Grid -->
