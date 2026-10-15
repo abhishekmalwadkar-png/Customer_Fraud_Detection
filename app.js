@@ -1547,7 +1547,9 @@ function renderFraudTicketsTable(tickets) {
   const countEl = document.getElementById("visibleTicketCount");
   const paginationEl = document.getElementById("ticketsPagination");
 
-  if (!isComplaintsViewActive) {
+  const totalActiveCount = allTickets.filter(t => t.status !== 'RESOLVED').length;
+
+  if (!isComplaintsViewActive || totalActiveCount === 0) {
     if (countEl) countEl.textContent = "0";
     if (paginationEl) paginationEl.innerHTML = "";
     const selectAllCheckbox = document.getElementById("selectAllTicketsCheckbox");
@@ -1556,16 +1558,26 @@ function renderFraudTicketsTable(tickets) {
       selectAllCheckbox.indeterminate = false;
     }
 
+    const isAllResolved = totalActiveCount === 0 && allTickets.length > 0;
+    const titleText = isAllResolved ? "All Complaints Resolved" : "Active Complaints Queue";
+    const subText = isAllResolved 
+      ? "All tickets have been resolved and closed. Click below to look for active complaints or generate 5 new cases."
+      : "Click below to look for and display all active customer fraud complaints from the database.";
+    const iconClass = isAllResolved ? "fa-circle-check" : "fa-clipboard-list";
+    const iconColor = isAllResolved ? "#059669" : "#ea580c";
+    const iconBg = isAllResolved ? "#ecfdf5" : "#fff7ed";
+    const iconBorder = isAllResolved ? "#a7f3d0" : "#fed7aa";
+
     tbody.innerHTML = `
       <tr>
         <td colspan="8" style="padding: 55px 20px; text-align: center; background: #ffffff;">
           <div style="display: flex; flex-direction: column; align-items: center; justify-content: center; max-width: 480px; margin: 0 auto; gap: 14px;">
-            <div style="width: 56px; height: 56px; border-radius: 50%; background: #fff7ed; color: #ea580c; display: flex; align-items: center; justify-content: center; font-size: 22px; box-shadow: 0 4px 14px rgba(234, 88, 12, 0.12); border: 1px solid #fed7aa;">
-              <i class="fa-solid fa-clipboard-list"></i>
+            <div style="width: 56px; height: 56px; border-radius: 50%; background: ${iconBg}; color: ${iconColor}; display: flex; align-items: center; justify-content: center; font-size: 22px; box-shadow: 0 4px 14px rgba(0,0,0,0.06); border: 1px solid ${iconBorder};">
+              <i class="fa-solid ${iconClass}"></i>
             </div>
             <div>
-              <h3 style="font-size: 16.5px; font-weight: 700; color: #0f172a; margin: 0 0 5px 0;">Active Complaints Queue</h3>
-              <p style="font-size: 13px; color: #64748b; margin: 0; line-height: 1.5;">Click below to look for and display all active customer fraud complaints from the database.</p>
+              <h3 style="font-size: 16.5px; font-weight: 700; color: #0f172a; margin: 0 0 5px 0;">${titleText}</h3>
+              <p style="font-size: 13px; color: #64748b; margin: 0; line-height: 1.5;">${subText}</p>
             </div>
             <button type="button" class="btn btn-primary" id="btnLookForActiveComplaints" onclick="fetchActiveComplaints()" style="padding: 9px 22px; font-size: 13px; font-weight: 700; background: linear-gradient(135deg, #fd8f3a 0%, #f87917 100%); color: #ffffff; border: none; border-radius: 8px; cursor: pointer; display: inline-flex; align-items: center; gap: 8px; box-shadow: 0 4px 14px rgba(248, 121, 23, 0.25);">
               <i class="fa-solid fa-magnifying-glass"></i> Look for Active Complaints
@@ -1580,7 +1592,16 @@ function renderFraudTicketsTable(tickets) {
   if (countEl) countEl.textContent = tickets.length;
 
   if (tickets.length === 0) {
-    tbody.innerHTML = `<tr><td colspan="8" class="loading-state">No fraud tickets match your current filters.</td></tr>`;
+    tbody.innerHTML = `
+      <tr>
+        <td colspan="8" style="padding: 40px 20px; text-align: center;">
+          <p style="color: #64748b; font-size: 13.5px; margin-bottom: 10px;">No fraud complaints match your current search filters.</p>
+          <button type="button" class="btn btn-xs btn-outline" onclick="clearFilters()" style="cursor: pointer;">
+            <i class="fa-solid fa-rotate-left"></i> Reset Filters
+          </button>
+        </td>
+      </tr>
+    `;
     renderPaginationControls("ticketsPagination", 1, 0, ticketPageSize, "changeTicketPage");
     return;
   }
