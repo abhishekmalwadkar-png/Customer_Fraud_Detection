@@ -1333,14 +1333,12 @@ async function fetchActiveComplaints() {
     isComplaintsViewActive = true;
 
     if (Array.isArray(data.tickets) && data.tickets.length > 0) {
-      allTickets = data.tickets;
       data.tickets.forEach(t => knownTicketIds.add(String(t.ticket_number || t.ticket_id)));
       try {
         sessionStorage.setItem("known_ticket_ids", JSON.stringify(Array.from(knownTicketIds)));
       } catch (e) {}
-    } else {
-      await loadFraudTickets(true);
     }
+    await loadFraudTickets(true);
 
     // Reset filter controls to ALL so newly generated complaints are immediately visible
     const searchInput = document.getElementById("ticketSearchInput");
@@ -1394,9 +1392,15 @@ async function manualSyncComplaints() {
       loadFraudTickets(true),
       loadOverviewStats(true, false)
     ]);
-    applyFilters();
 
-    const activeCount = allTickets.filter(t => t.status !== 'RESOLVED').length;
+    let activeCount = allTickets.filter(t => t.status !== 'RESOLVED').length;
+    // If active complaints are 0, immediately trigger generation so the user is never stuck
+    if (activeCount === 0) {
+      await fetchActiveComplaints();
+      return;
+    }
+
+    applyFilters();
     const newCount = knownTicketIds.size - prevKnownCount;
 
     if (btn) {
@@ -1703,28 +1707,28 @@ function renderFraudTicketsTable(tickets) {
     }
 
     const isAllResolved = totalActiveCount === 0 && allTickets.length > 0;
-    const titleText = isAllResolved ? "All Complaints Resolved" : "No Complaints in Queue";
+    const titleText = isAllResolved ? "All Complaints Resolved" : "Active Complaints Queue";
     const subText = isAllResolved 
-      ? "All tickets have been resolved and closed. Check the Solved Complaints section for records."
-      : "The complaints queue is currently clear. Click Refresh / Sync when new complaints are added.";
-    const iconClass = isAllResolved ? "fa-circle-check" : "fa-folder-open";
-    const iconColor = isAllResolved ? "#059669" : "#64748b";
-    const iconBg = isAllResolved ? "#ecfdf5" : "#f8fafc";
-    const iconBorder = isAllResolved ? "#a7f3d0" : "#e2e8f0";
+      ? "All tickets have been resolved and closed. Click below to look for active complaints."
+      : "Click below to look for and display all active customer fraud complaints from the database.";
+    const iconClass = isAllResolved ? "fa-circle-check" : "fa-clipboard-list";
+    const iconColor = isAllResolved ? "#059669" : "#ea580c";
+    const iconBg = isAllResolved ? "#ecfdf5" : "#fff7ed";
+    const iconBorder = isAllResolved ? "#a7f3d0" : "#fed7aa";
 
     tbody.innerHTML = `
       <tr>
         <td colspan="8" style="padding: 55px 20px; text-align: center; background: #ffffff;">
           <div style="display: flex; flex-direction: column; align-items: center; justify-content: center; max-width: 480px; margin: 0 auto; gap: 14px;">
-            <div style="width: 56px; height: 56px; border-radius: 50%; background: ${iconBg}; color: ${iconColor}; display: flex; align-items: center; justify-content: center; font-size: 22px; box-shadow: 0 4px 14px rgba(0,0,0,0.06); border: 1px solid ${iconBorder};">
+            <div style="width: 56px; height: 56px; border-radius: 50%; background: ${iconBg}; color: ${iconColor}; display: flex; align-items: center; justify-content: center; font-size: 22px; box-shadow: 0 4px 14px rgba(234, 88, 12, 0.12); border: 1px solid ${iconBorder};">
               <i class="fa-solid ${iconClass}"></i>
             </div>
             <div>
               <h3 style="font-size: 16.5px; font-weight: 700; color: #0f172a; margin: 0 0 5px 0;">${titleText}</h3>
               <p style="font-size: 13px; color: #64748b; margin: 0; line-height: 1.5;">${subText}</p>
             </div>
-            <button type="button" class="btn btn-outline" onclick="manualSyncComplaints()" style="padding: 8px 18px; font-size: 12.5px; font-weight: 700; border-radius: 8px; cursor: pointer; display: inline-flex; align-items: center; gap: 7px;">
-              <i class="fa-solid fa-arrows-rotate"></i> Refresh / Sync Database
+            <button type="button" class="btn btn-primary" id="btnLookForActiveComplaints" onclick="fetchActiveComplaints()" style="padding: 9px 22px; font-size: 13px; font-weight: 700; background: linear-gradient(135deg, #fd8f3a 0%, #f87917 100%); color: #ffffff; border: none; border-radius: 8px; cursor: pointer; display: inline-flex; align-items: center; gap: 8px; box-shadow: 0 4px 14px rgba(248, 121, 23, 0.25);">
+              <i class="fa-solid fa-magnifying-glass"></i> Look for Active Complaints
             </button>
           </div>
         </td>
