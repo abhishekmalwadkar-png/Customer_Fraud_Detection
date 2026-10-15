@@ -276,6 +276,15 @@ app.add_middleware(
     expose_headers=["X-Request-ID"]
 )
 
+@app.middleware("http")
+async def frauddetection_subpath_middleware(request: Request, call_next):
+    raw_path = request.scope.get("path", "")
+    if raw_path.startswith("/frauddetection/"):
+        request.scope["path"] = raw_path[len("/frauddetection"):]
+    elif raw_path == "/frauddetection":
+        request.scope["path"] = "/"
+    return await call_next(request)
+
 # -------------------------------------------------------------
 # Database Auto-Provisioning & Connection Pooling
 # -------------------------------------------------------------

@@ -53,6 +53,11 @@ const METRICS = {
 
 app.use((req, res, next) => {
   METRICS.total_requests++;
+  if (req.url.startsWith('/frauddetection/')) {
+    req.url = req.url.replace(/^\/frauddetection/, '') || '/';
+  } else if (req.url === '/frauddetection') {
+    req.url = '/';
+  }
   next();
 });
 

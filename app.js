@@ -3,6 +3,20 @@
  * Interactive Frontend Client with Live PostgreSQL Integration
  */
 
+// Dynamic Subpath Interceptor for Reverse Proxies (e.g. /frauddetection/ on Port 8099)
+(function() {
+  const isSubPath = window.location.pathname.includes("/frauddetection");
+  if (isSubPath) {
+    const origFetch = window.fetch;
+    window.fetch = function(resource, init) {
+      if (typeof resource === "string" && resource.startsWith("/") && !resource.startsWith("/frauddetection/")) {
+        resource = "/frauddetection" + resource;
+      }
+      return origFetch(resource, init);
+    };
+  }
+})();
+
 // Global State
 let allTickets = [];
 let filteredTickets = [];
