@@ -21,7 +21,15 @@ from fastapi import FastAPI, Request, Response, HTTPException, status, Depends
 from fastapi.responses import JSONResponse, FileResponse, HTMLResponse, StreamingResponse
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field, field_validator
-import pg8000.dbapi
+try:
+    import pg8000.dbapi
+except ImportError:
+    import subprocess
+    import sys
+    print("[*] 'pg8000' driver not found. Automatically installing pg8000 and dbutils...")
+    subprocess.check_call([sys.executable, "-m", "pip", "install", "pg8000>=1.30.0", "dbutils>=3.2.0"])
+    import pg8000.dbapi
+
 import uvicorn
 
 try:
@@ -50,7 +58,14 @@ from config import (
     AE_WORKFLOW_RAISE_FRAUD, AE_WORKFLOW_FREEZE_ACCOUNT, AE_WORKFLOW_UNBLOCK_ACCOUNT, AE_WORKFLOW_RESOLVE_TICKET,
     AE_TRIGGER_ENABLED
 )
-from dbutils.pooled_db import PooledDB
+try:
+    from dbutils.pooled_db import PooledDB
+except ImportError:
+    import subprocess
+    import sys
+    print("[*] 'dbutils' not found. Automatically installing dbutils...")
+    subprocess.check_call([sys.executable, "-m", "pip", "install", "dbutils>=3.2.0"])
+    from dbutils.pooled_db import PooledDB
 
 # -------------------------------------------------------------
 # Production Logging Configuration
