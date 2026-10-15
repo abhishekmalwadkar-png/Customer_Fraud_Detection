@@ -1118,13 +1118,28 @@ body.sidebar-closed .portal-sidebar,
   transform: translateY(-1px);
 }
 
-.nav-tab.active i {
-  color: #1c1f2a;
+.nav-tab::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  top: 50%;
+  transform: translateY(-50%) scaleY(0);
+  width: 4px;
+  height: 22px;
+  border-radius: 0 4px 4px 0;
+  background: #ffffff;
+  transition: transform 0.28s cubic-bezier(0.34, 1.56, 0.64, 1), opacity 0.2s ease;
+  opacity: 0;
 }
 
-.nav-tab.active:hover {
-  transform: translateY(-4px) scale(1.02);
-  box-shadow: 0 10px 24px rgba(248, 121, 23, 0.55), 0 0 20px rgba(248, 121, 23, 0.3);
+.nav-tab.active::before {
+  transform: translateY(-50%) scaleY(1);
+  opacity: 1;
+  box-shadow: 0 0 10px rgba(255, 255, 255, 0.9);
+}
+
+.nav-tab:active {
+  transform: scale(0.97) !important;
 }
 
 .nav-badge {
@@ -1283,6 +1298,7 @@ body.sidebar-closed .portal-sidebar,
 
 /* Main Content Area */
 .portal-content {
+  position: relative;
   flex: 1;
   background: var(--bg-body);
   padding: 12px 16px;
@@ -1292,11 +1308,49 @@ body.sidebar-closed .portal-sidebar,
   flex-direction: column;
   width: 100%;
   box-sizing: border-box;
+  scroll-behavior: smooth;
+}
+
+/* Fluid Sweeper Line for Tab Navigation */
+.tab-transition-bar {
+  position: sticky;
+  top: -12px;
+  left: -16px;
+  right: -16px;
+  width: calc(100% + 32px);
+  height: 3px;
+  background: linear-gradient(90deg, #fd8f3a 0%, #ea580c 45%, #f97316 75%, transparent 100%);
+  z-index: 99;
+  pointer-events: none;
+  opacity: 0;
+  transform: scaleX(0);
+  transform-origin: left center;
+  box-shadow: 0 1px 10px rgba(248, 121, 23, 0.7);
+  margin-top: -12px;
+  margin-bottom: 12px;
+}
+
+.tab-transition-bar.animating {
+  animation: tabGlowSweep 0.42s cubic-bezier(0.22, 1, 0.36, 1) forwards;
+}
+
+@keyframes tabGlowSweep {
+  0% {
+    opacity: 1;
+    transform: scaleX(0.04);
+  }
+  60% {
+    opacity: 1;
+    transform: scaleX(0.85);
+  }
+  100% {
+    opacity: 0;
+    transform: scaleX(1);
+  }
 }
 
 .tab-panel {
   display: none;
-  animation: fadeIn 0.25s ease;
   width: 100%;
 }
 
@@ -1305,17 +1359,65 @@ body.sidebar-closed .portal-sidebar,
   flex-direction: column;
   flex: 1;
   width: 100%;
+  animation: tabSlideUpFade 0.36s cubic-bezier(0.16, 1, 0.3, 1) both;
 }
 
-@keyframes fadeIn {
-  from {
+@keyframes tabSlideUpFade {
+  0% {
     opacity: 0;
-    transform: translateY(4px);
+    transform: translateY(16px) scale(0.995);
+    filter: blur(1.5px);
   }
+  100% {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+    filter: blur(0);
+  }
+}
 
-  to {
+/* Staggered entrance for tab content blocks */
+.tab-panel.active > .panel-header,
+.tab-panel.active > .home-hero-card {
+  animation: tabChildCascade 0.32s cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+.tab-panel.active > .filter-controls-card,
+.tab-panel.active > .home-pulse-grid,
+.tab-panel.active > .kpi-grid,
+.tab-panel.active > .kpi-metric-grid,
+.tab-panel.active > .results-meta-bar {
+  animation: tabChildCascade 0.38s cubic-bezier(0.16, 1, 0.3, 1) 0.04s both;
+}
+
+.tab-panel.active > .dash-card,
+.tab-panel.active > .table-card,
+.tab-panel.active > .table-wrapper-card,
+.tab-panel.active > .home-two-col-grid,
+.tab-panel.active > .overview-two-col-grid,
+.tab-panel.active > .analytics-grid,
+.tab-panel.active > #pieChartLayoutWrapper {
+  animation: tabChildCascade 0.42s cubic-bezier(0.16, 1, 0.3, 1) 0.08s both;
+}
+
+@keyframes tabChildCascade {
+  0% {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  100% {
     opacity: 1;
     transform: translateY(0);
+  }
+}
+
+/* Accessibility: prefers-reduced-motion */
+@media (prefers-reduced-motion: reduce) {
+  .tab-panel.active,
+  .tab-panel.active > *,
+  .tab-transition-bar.animating {
+    animation: none !important;
+    transform: none !important;
+    filter: none !important;
   }
 }
 

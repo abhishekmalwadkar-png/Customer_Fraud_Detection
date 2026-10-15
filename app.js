@@ -267,8 +267,24 @@ window.switchTab = function(targetTabId) {
       }
     });
 
+    // Trigger glowing tab transition progress bar
+    const bar = document.getElementById("tabTransitionBar");
+    if (bar) {
+      bar.classList.remove("animating");
+      void bar.offsetWidth; // Force reflow to re-trigger animation
+      bar.classList.add("animating");
+    }
+
+    // Smoothly scroll content container back to top
+    const contentArea = document.getElementById("mainContentArea");
+    if (contentArea && contentArea.scrollTop > 0) {
+      contentArea.scrollTo({ top: 0, behavior: "smooth" });
+    }
+
     document.querySelectorAll(".tab-panel").forEach(panel => {
       if (panel.id === targetTabId) {
+        panel.classList.remove("active");
+        void panel.offsetWidth; // Force reflow so entrance transition triggers every time
         panel.classList.add("active");
       } else {
         panel.classList.remove("active");
