@@ -679,6 +679,16 @@
           </div>
         </div>
 
+        <div class="search-filter-bar" style="margin-bottom: 14px; display: flex; align-items: center; justify-content: space-between; gap: 12px;">
+          <div class="search-box" style="max-width: 380px; flex: 1;">
+            <i class="fa-solid fa-magnifying-glass"></i>
+            <input type="text" id="txnSearchInput" placeholder="Search by Txn ID, customer, account #, or merchant...">
+          </div>
+          <div style="font-size: 12.5px; color: var(--text-muted);">
+            Showing <strong id="visibleTxnCount">0</strong> transactions
+          </div>
+        </div>
+
         <div class="table-container">
           <table class="data-table" id="txnsTable">
             <thead>
@@ -700,6 +710,9 @@
             </tbody>
           </table>
         </div>
+
+        <!-- Recent Transactions Pagination Controls (10 per page) -->
+        <div class="pagination-footer" id="txnsPagination"></div>
       </section>
 
       <!-- ================= TAB 5: FRAUD TYPES & HELP ================= -->
@@ -1153,6 +1166,6 @@
   <!-- Toast Notification Container -->
   <div class="toast-container" id="toastContainer"></div>
 
-  <script src="app.js?v=25.0"></script>
+  <script src="app.js?v=26.0"></script>
 </body>
 </html>

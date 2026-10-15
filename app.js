@@ -37,6 +37,9 @@ let customerCurrentPage = 1;
 const customerPageSize = 10;
 let customerDirectoryData = [];
 let recentTxData = [];
+let filteredTxData = [];
+let txnCurrentPage = 1;
+const txnPageSize = 10;
 let selectedTicketIds = new Set();
 let currentDossierTicket = null;
 
@@ -401,6 +404,14 @@ function initEventListeners() {
   if (custSearchInput) {
     custSearchInput.addEventListener("input", () => {
       applyCustomerSearch();
+    });
+  }
+
+  // Transaction search
+  const txnSearchInput = document.getElementById("txnSearchInput");
+  if (txnSearchInput) {
+    txnSearchInput.addEventListener("input", () => {
+      applyTxnSearch();
     });
   }
 
@@ -2586,7 +2597,7 @@ window.filterByCustomerName = function(name) {
   applyFilters();
 };
 
-// 9. Live Transactions
+// 9. Live Transactions & Pagination (10 per page)
 async function loadTransactions() {
   const tbody = document.getElementById("txnsTableBody");
   if (!tbody) return;
@@ -2596,52 +2607,112 @@ async function loadTransactions() {
       throw new Error(`HTTP ${res.status}`);
     }
     const data = await res.json();
-    const txns = Array.isArray(data) ? data : (Array.isArray(data?.items) ? data.items : []);
-
-    if (txns.length === 0) {
-      tbody.innerHTML = `<tr><td colspan="10" class="loading-state">No transaction records found in database ledger.</td></tr>`;
-      return;
-    }
-
-    tbody.innerHTML = txns.map(tx => `
-      <tr>
-        <td><span class="code-font highlight-cyan">${tx.txn_reference || ('TXN-' + tx.txn_id)}</span></td>
-        <td>
-          <div class="customer-cell">
-            <span class="customer-name">${escapeHtml(tx.full_name || tx.customer_name || 'Customer')}</span>
-            <span class="customer-sub code-font">${tx.account_number || ''}</span>
-          </div>
-        </td>
-        <td><span class="code-font" style="color: var(--text-main);">${tx.account_number || ''}</span></td>
-        <td><span class="amount-font highlight-red">${formatCurrency(tx.amount || 0)}</span></td>
-        <td><span class="tag-pill tag-cyan">${tx.txn_type || 'TRANSFER'}</span></td>
-        <td><span style="font-size: 12px;">${escapeHtml(tx.merchant_or_recipient || 'N/A')}</span></td>
-        <td><span class="code-font" style="font-size: 11px; color: var(--text-dim);">${escapeHtml(tx.ip_address || 'Internal')}</span></td>
-        <td>
-          <div style="display: flex; align-items: center; gap: 8px;">
-            <div class="progress-bar-wrap" style="width: 60px;">
-              <div class="bar-fill ${(tx.fraud_risk_score || 0) > 75 ? 'red' : 'amber'}" style="width: ${tx.fraud_risk_score || 0}%;"></div>
-            </div>
-            <strong class="code-font ${(tx.fraud_risk_score || 0) > 75 ? 'highlight-red' : 'highlight-amber'}">${tx.fraud_risk_score || 0}%</strong>
-          </div>
-        </td>
-        <td>
-          <span class="tag-pill ${tx.is_fraud_flagged ? 'tag-critical' : 'tag-resolved'}">
-            ${tx.is_fraud_flagged ? 'FLAGGED' : 'CLEAN'}
-          </span>
-        </td>
-        <td>
-          <span class="tag-pill ${tx.status === 'BLOCKED' ? 'tag-frozen' : (tx.status === 'HELD' ? 'tag-high' : 'tag-resolved')}">
-            ${tx.status || 'COMPLETED'}
-          </span>
-        </td>
-      </tr>
-    `).join("");
+    recentTxData = Array.isArray(data) ? data : (Array.isArray(data?.items) ? data.items : []);
+    applyTxnSearch();
   } catch (err) {
     console.error("loadTransactions error:", err);
     tbody.innerHTML = `<tr><td colspan="10" class="loading-state">No active transaction alerts found.</td></tr>`;
+    renderPaginationControls("txnsPagination", 1, 0, txnPageSize, "changeTxnPage", "transactions");
   }
 }
+
+function applyTxnSearch() {
+  const searchInput = document.getElementById("txnSearchInput");
+  const query = searchInput ? searchInput.value.trim().toLowerCase() : "";
+
+  if (!query) {
+    filteredTxData = [...recentTxData];
+  } else {
+    filteredTxData = recentTxData.filter(tx => {
+      return (
+        (tx.txn_reference || "").toLowerCase().includes(query) ||
+        (tx.customer_name || tx.full_name || "").toLowerCase().includes(query) ||
+        (tx.account_number || "").toLowerCase().includes(query) ||
+        (tx.merchant_or_recipient || "").toLowerCase().includes(query) ||
+        (tx.txn_type || "").toLowerCase().includes(query) ||
+        (tx.status || "").toLowerCase().includes(query) ||
+        (tx.ip_address || "").toLowerCase().includes(query)
+      );
+    });
+  }
+
+  txnCurrentPage = 1;
+  renderTransactionsTable(filteredTxData);
+}
+
+function renderTransactionsTable(txns) {
+  const tbody = document.getElementById("txnsTableBody");
+  const countEl = document.getElementById("visibleTxnCount");
+  if (!tbody) return;
+
+  const totalItems = txns ? txns.length : 0;
+  if (countEl) countEl.textContent = totalItems.toLocaleString("en-IN");
+
+  if (totalItems === 0) {
+    tbody.innerHTML = `<tr><td colspan="10" class="loading-state">No transaction records match your search.</td></tr>`;
+    renderPaginationControls("txnsPagination", 1, 0, txnPageSize, "changeTxnPage", "transactions");
+    return;
+  }
+
+  const totalPages = Math.ceil(totalItems / txnPageSize) || 1;
+  if (txnCurrentPage > totalPages) txnCurrentPage = totalPages;
+  if (txnCurrentPage < 1) txnCurrentPage = 1;
+
+  const startIndex = (txnCurrentPage - 1) * txnPageSize;
+  const paginatedTxns = txns.slice(startIndex, startIndex + txnPageSize);
+
+  tbody.innerHTML = paginatedTxns.map(tx => `
+    <tr>
+      <td><span class="code-font highlight-cyan">${escapeHtml(tx.txn_reference || ('TXN-' + tx.txn_id))}</span></td>
+      <td>
+        <div class="customer-cell">
+          <span class="customer-name">${escapeHtml(tx.full_name || tx.customer_name || 'Customer')}</span>
+          <span class="customer-sub code-font">${escapeHtml(tx.account_number || '')}</span>
+        </div>
+      </td>
+      <td><span class="code-font" style="color: var(--text-main);">${escapeHtml(tx.account_number || '')}</span></td>
+      <td><span class="amount-font highlight-red">${formatCurrency(tx.amount || 0)}</span></td>
+      <td><span class="tag-pill tag-cyan">${escapeHtml(tx.txn_type || 'TRANSFER')}</span></td>
+      <td><span style="font-size: 12px;">${escapeHtml(tx.merchant_or_recipient || 'N/A')}</span></td>
+      <td><span class="code-font" style="font-size: 11px; color: var(--text-dim);">${escapeHtml(tx.ip_address || 'Internal')}</span></td>
+      <td>
+        <div style="display: flex; align-items: center; gap: 8px;">
+          <div class="progress-bar-wrap" style="width: 60px;">
+            <div class="bar-fill ${(tx.fraud_risk_score || 0) > 75 ? 'red' : 'amber'}" style="width: ${Math.min(100, Math.max(0, tx.fraud_risk_score || 0))}%;"></div>
+          </div>
+          <strong class="code-font ${(tx.fraud_risk_score || 0) > 75 ? 'highlight-red' : 'highlight-amber'}">${tx.fraud_risk_score || 0}%</strong>
+        </div>
+      </td>
+      <td>
+        <span class="tag-pill ${tx.is_fraud_flagged ? 'tag-critical' : 'tag-resolved'}">
+          ${tx.is_fraud_flagged ? 'FLAGGED' : 'CLEAN'}
+        </span>
+      </td>
+      <td>
+        <span class="tag-pill ${tx.status === 'BLOCKED' ? 'tag-frozen' : (tx.status === 'HELD' ? 'tag-high' : 'tag-resolved')}">
+          ${escapeHtml(tx.status || 'COMPLETED')}
+        </span>
+      </td>
+    </tr>
+  `).join("");
+
+  renderPaginationControls("txnsPagination", txnCurrentPage, totalItems, txnPageSize, "changeTxnPage", "transactions");
+}
+
+window.changeTxnPage = function(newPage) {
+  const totalPages = Math.ceil(filteredTxData.length / txnPageSize) || 1;
+  if (newPage < 1) newPage = 1;
+  if (newPage > totalPages) newPage = totalPages;
+  txnCurrentPage = newPage;
+  renderTransactionsTable(filteredTxData);
+  const tableEl = document.getElementById("txnsTable");
+  if (tableEl) {
+    const rect = tableEl.getBoundingClientRect();
+    if (rect.top < 0) {
+      tableEl.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }
+  }
+};
 
 // 10. Threat Analytics / Executive Charts
 async function loadAnalytics() {
