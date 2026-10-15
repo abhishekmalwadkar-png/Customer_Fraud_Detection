@@ -1272,12 +1272,59 @@ app.post('/api/customer/report-dispute', async (req, res) => {
 // ==========================================
 // 7. Transactions & Audit Logs
 // ==========================================
+const SAMPLE_TRANSACTIONS = [
+  { txn_ref: "TXN-2026-9811", amount: 145000.00, txn_type: "IMPS_TRANSFER", merchant: "Apex Crypto P2P Desk", channel: "MOBILE_APP", ip: "185.220.101.5", location: "Moscow, Russia", is_fraud: true, risk: 96, status: "BLOCKED" },
+  { txn_ref: "TXN-2026-9812", amount: 48500.00, txn_type: "UPI_PAYMENT", merchant: "QuickLoan Recovery APK", channel: "UPI_GATEWAY", ip: "103.21.244.18", location: "Kolkata, India", is_fraud: true, risk: 89, status: "HELD" },
+  { txn_ref: "TXN-2026-9813", amount: 320000.00, txn_type: "RTGS_CLEARING", merchant: "Skype CyberCrimeHQ Escrow", channel: "INTERNET_BANKING", ip: "45.134.225.18", location: "Phnom Penh, Cambodia", is_fraud: true, risk: 98, status: "BLOCKED" },
+  { txn_ref: "TXN-2026-9814", amount: 75000.00, txn_type: "NEFT_TRANSFER", merchant: "TaskMaster Global Ratings", channel: "MOBILE_APP", ip: "114.119.130.45", location: "Shenzhen, China", is_fraud: true, risk: 84, status: "HELD" },
+  { txn_ref: "TXN-2026-9815", amount: 12500.00, txn_type: "POS_PURCHASE", merchant: "Croma Electronics Store", channel: "POS_TERMINAL", ip: "14.139.128.2", location: "Mumbai, India", is_fraud: false, risk: 12, status: "COMPLETED" },
+  { txn_ref: "TXN-2026-9816", amount: 92000.00, txn_type: "IMPS_TRANSFER", merchant: "eSIM Clone NetBanking", channel: "INTERNET_BANKING", ip: "194.26.29.112", location: "Dubai, UAE", is_fraud: true, risk: 92, status: "BLOCKED" },
+  { txn_ref: "TXN-2026-9817", amount: 3500.00, txn_type: "UPI_PAYMENT", merchant: "Swiggy Online Food", channel: "UPI_GATEWAY", ip: "49.36.120.89", location: "Pune, India", is_fraud: false, risk: 8, status: "COMPLETED" },
+  { txn_ref: "TXN-2026-9818", amount: 250000.00, txn_type: "NEFT_TRANSFER", merchant: "Fake Stock Trading IPO Pool", channel: "INTERNET_BANKING", ip: "104.244.76.13", location: "Lagos, Nigeria", is_fraud: true, risk: 95, status: "BLOCKED" }
+];
+
+async function seedDefaultTransactionsIfEmpty(client) {
+  try {
+    const countRes = await client.query('SELECT COUNT(*) AS total FROM transactions;');
+    if (parseInt(countRes.rows[0].total, 10) > 0) return;
+
+    let custs = [];
+    try {
+      const cRes = await client.query('SELECT customer_id, customer_name, account_number FROM customer_accounts LIMIT 10;');
+      custs = cRes.rows;
+    } catch (e) {}
+
+    for (let i = 0; i < SAMPLE_TRANSACTIONS.length; i++) {
+      const s = SAMPLE_TRANSACTIONS[i];
+      const linked = custs.length > 0 ? custs[i % custs.length] : null;
+      const cid = linked ? linked.customer_id : null;
+      const cname = linked ? linked.customer_name : "Suresh Patel";
+      const acc = linked ? linked.account_number : "ACT-2026-4499";
+
+      await client.query(`
+        INSERT INTO transactions (
+          txn_reference, customer_id, customer_name, account_number, amount,
+          txn_type, merchant_or_recipient, channel, ip_address, geo_location,
+          is_fraud_flagged, fraud_risk_score, status, txn_time
+        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, CURRENT_TIMESTAMP - ($14 || ' minutes')::INTERVAL);
+      `, [
+        s.txn_ref, cid, cname, acc, s.amount,
+        s.txn_type, s.merchant, s.channel, s.ip, s.location,
+        s.is_fraud, s.risk, s.status, (i * 12 + 5)
+      ]);
+    }
+  } catch (err) {
+    console.warn("Auto-seed transactions warning:", err.message);
+  }
+}
+
 app.get('/api/transactions', async (req, res) => {
   try {
     const client = await pool.connect();
     try {
+      await seedDefaultTransactionsIfEmpty(client);
       const result = await client.query(`
-        SELECT txn_id, txn_reference, customer_id, customer_name, account_number, amount, txn_type, merchant_or_recipient, channel, ip_address, geo_location, is_fraud_flagged, fraud_risk_score, status, txn_time
+        SELECT txn_id, txn_reference, customer_id, customer_name, customer_name AS full_name, account_number, amount, txn_type, merchant_or_recipient, channel, ip_address, geo_location, is_fraud_flagged, fraud_risk_score, status, txn_time
         FROM transactions
         ORDER BY txn_time DESC LIMIT 100;
       `);

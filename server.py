@@ -3846,6 +3846,99 @@ def api_download_audit_pdf(request: Request):
         cursor.close()
         conn.close()
 
+SAMPLE_TRANSACTIONS = [
+    {
+        "txn_ref": "TXN-2026-9811", "amount": 145000.00, "txn_type": "IMPS_TRANSFER",
+        "merchant": "Apex Crypto P2P Desk", "channel": "MOBILE_APP",
+        "ip": "185.220.101.5", "location": "Moscow, Russia",
+        "is_fraud": True, "risk": 96, "status": "BLOCKED"
+    },
+    {
+        "txn_ref": "TXN-2026-9812", "amount": 48500.00, "txn_type": "UPI_PAYMENT",
+        "merchant": "QuickLoan Recovery APK", "channel": "UPI_GATEWAY",
+        "ip": "103.21.244.18", "location": "Kolkata, India",
+        "is_fraud": True, "risk": 89, "status": "HELD"
+    },
+    {
+        "txn_ref": "TXN-2026-9813", "amount": 320000.00, "txn_type": "RTGS_CLEARING",
+        "merchant": "Skype CyberCrimeHQ Escrow", "channel": "INTERNET_BANKING",
+        "ip": "45.134.225.18", "location": "Phnom Penh, Cambodia",
+        "is_fraud": True, "risk": 98, "status": "BLOCKED"
+    },
+    {
+        "txn_ref": "TXN-2026-9814", "amount": 75000.00, "txn_type": "NEFT_TRANSFER",
+        "merchant": "TaskMaster Global Ratings", "channel": "MOBILE_APP",
+        "ip": "114.119.130.45", "location": "Shenzhen, China",
+        "is_fraud": True, "risk": 84, "status": "HELD"
+    },
+    {
+        "txn_ref": "TXN-2026-9815", "amount": 12500.00, "txn_type": "POS_PURCHASE",
+        "merchant": "Croma Electronics Store", "channel": "POS_TERMINAL",
+        "ip": "14.139.128.2", "location": "Mumbai, India",
+        "is_fraud": False, "risk": 12, "status": "COMPLETED"
+    },
+    {
+        "txn_ref": "TXN-2026-9816", "amount": 92000.00, "txn_type": "IMPS_TRANSFER",
+        "merchant": "eSIM Clone NetBanking", "channel": "INTERNET_BANKING",
+        "ip": "194.26.29.112", "location": "Dubai, UAE",
+        "is_fraud": True, "risk": 92, "status": "BLOCKED"
+    },
+    {
+        "txn_ref": "TXN-2026-9817", "amount": 3500.00, "txn_type": "UPI_PAYMENT",
+        "merchant": "Swiggy Online Food", "channel": "UPI_GATEWAY",
+        "ip": "49.36.120.89", "location": "Pune, India",
+        "is_fraud": False, "risk": 8, "status": "COMPLETED"
+    },
+    {
+        "txn_ref": "TXN-2026-9818", "amount": 250000.00, "txn_type": "NEFT_TRANSFER",
+        "merchant": "Fake Stock Trading IPO Pool", "channel": "INTERNET_BANKING",
+        "ip": "104.244.76.13", "location": "Lagos, Nigeria",
+        "is_fraud": True, "risk": 95, "status": "BLOCKED"
+    }
+]
+
+def seed_default_transactions_if_empty(conn):
+    """Auto-seeds realistic transactions ledger if PostgreSQL transactions table is empty."""
+    try:
+        cur = conn.cursor()
+        cur.execute("SELECT COUNT(*) FROM transactions;")
+        cnt = cur.fetchone()[0]
+        if cnt > 0:
+            cur.close()
+            return
+
+        cur.execute("SELECT customer_id, customer_name, account_number FROM customer_accounts LIMIT 10;")
+        custs = cur.fetchall()
+        if not custs:
+            cur.execute("SELECT customer_id, full_name, 'ACT-1002-3344' FROM customers LIMIT 10;")
+            custs = cur.fetchall()
+
+        for i, s in enumerate(SAMPLE_TRANSACTIONS):
+            cid = None
+            cname = "Suresh Patel"
+            acc = "ACT-2026-4499"
+            if custs:
+                crow = custs[i % len(custs)]
+                cid = crow[0]
+                cname = crow[1]
+                acc = crow[2]
+
+            cur.execute("""
+                INSERT INTO transactions (
+                    txn_reference, customer_id, customer_name, account_number, amount,
+                    txn_type, merchant_or_recipient, channel, ip_address, geo_location,
+                    is_fraud_flagged, fraud_risk_score, status, txn_time
+                ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, CURRENT_TIMESTAMP - (%s || ' minutes')::INTERVAL);
+            """, (
+                s["txn_ref"], cid, cname, acc, s["amount"],
+                s["txn_type"], s["merchant"], s["channel"], s["ip"], s["location"],
+                s["is_fraud"], s["risk"], s["status"], str(i * 12 + 5)
+            ))
+        conn.commit()
+        cur.close()
+    except Exception as e:
+        logger.warning(f"Auto-seed transactions notice: {e}")
+
 @app.get("/api/transactions", tags=["Banking Core"])
 def api_get_transactions(
     page: Optional[int] = None,
@@ -3858,6 +3951,7 @@ def api_get_transactions(
 ):
     """Retrieve forensic ledger of transactions with partition pruning, FTS, and server-side pagination."""
     conn = get_db_connection()
+    seed_default_transactions_if_empty(conn)
     cursor = conn.cursor()
     try:
         where_clauses = []
