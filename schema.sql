@@ -280,7 +280,7 @@ SELECT
     t.incident_date,
     t.description
 FROM fraud_tickets t
-JOIN customers c ON t.customer_id = c.customer_id;
+LEFT JOIN customers c ON t.customer_id = c.customer_id;
 
 CREATE VIEW v_customer_fraud_summary AS
 SELECT 

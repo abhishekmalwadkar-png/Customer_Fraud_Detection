@@ -1659,7 +1659,7 @@ def api_get_fraud_tickets(
             count_sql = f"""
                 SELECT COUNT(*) 
                 FROM fraud_tickets t
-                JOIN customers c ON t.customer_id = c.customer_id
+                LEFT JOIN customers c ON t.customer_id = c.customer_id
                 {where_sql};
             """
             cursor.execute(count_sql, tuple(params))
@@ -1677,14 +1677,16 @@ def api_get_fraud_tickets(
 
         sql = f"""
             SELECT 
-                t.ticket_id, t.ticket_number, t.customer_id, c.customer_code, COALESCE(t.customer_name, c.full_name) as customer_name, c.email, c.phone, c.risk_tier,
+                t.ticket_id, t.ticket_number, t.customer_id, COALESCE(c.customer_code, 'CUST-GEN') as customer_code, 
+                COALESCE(t.customer_name, c.full_name, c.customer_name, 'Bank Customer') as customer_name, 
+                COALESCE(c.email, '') as email, COALESCE(c.phone, '') as phone, COALESCE(c.risk_tier, 'STANDARD') as risk_tier,
                 t.account_number, ca.account_type, ca.balance, ca.status as account_status,
                 t.incident_type, t.amount_involved, t.recovered_amount, t.incident_date,
                 t.reported_channel, t.severity, t.status, t.assigned_investigator,
                 t.flagged_ip_or_location, t.suspect_entity, t.description, t.action_taken,
                 t.created_at
             FROM fraud_tickets t
-            JOIN customers c ON t.customer_id = c.customer_id
+            LEFT JOIN customers c ON t.customer_id = c.customer_id
             LEFT JOIN customer_accounts ca ON (t.customer_id = ca.customer_id AND t.account_number = ca.account_number)
             {where_sql}
             {order_sql}

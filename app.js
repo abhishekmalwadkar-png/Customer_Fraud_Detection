@@ -1285,6 +1285,21 @@ async function fetchActiveComplaints() {
     btn.innerHTML = `<i class="fa-solid fa-spinner fa-spin"></i> Generating 5 Complaints...`;
   }
 
+  const tbody = document.getElementById("fraudTicketsTableBody");
+  if (tbody) {
+    tbody.innerHTML = `
+      <tr>
+        <td colspan="8" style="padding: 45px 20px; text-align: center; color: #64748b;">
+          <div style="display: flex; flex-direction: column; align-items: center; gap: 12px;">
+            <i class="fa-solid fa-spinner fa-spin" style="font-size: 28px; color: #f97316;"></i>
+            <span style="font-weight: 700; font-size: 14.5px; color: #0f172a;">Generating 5 new active fraud complaints in PostgreSQL...</span>
+            <span style="font-size: 12.5px; color: #64748b;">Connecting to live database and populating SOC queue</span>
+          </div>
+        </td>
+      </tr>
+    `;
+  }
+
   try {
     const res = await fetch("/api/fraud-tickets/look-for-active?force=true", {
       method: "POST",

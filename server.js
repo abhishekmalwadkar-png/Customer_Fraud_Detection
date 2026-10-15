@@ -480,59 +480,46 @@ app.get('/api/fraud-tickets', async (req, res) => {
     const client = await pool.connect();
     try {
       let query = `
-        SELECT ticket_id, ticket_number, customer_id, customer_name, full_name, email, phone, account_number, account_type, incident_type, amount_involved, recovered_amount, incident_date, reported_channel, severity, status, assigned_investigator, flagged_ip_or_location, suspect_entity, description, action_taken, resolution_notes, created_at, updated_at
-        FROM v_fraud_tickets_full
+        SELECT 
+          t.ticket_id, t.ticket_number, t.customer_id, 
+          COALESCE(t.customer_name, c.full_name, c.customer_name, 'Bank Customer') AS customer_name,
+          COALESCE(c.full_name, t.customer_name, 'Bank Customer') AS full_name,
+          COALESCE(c.email, '') AS email, 
+          COALESCE(c.phone, '') AS phone, 
+          t.account_number, 
+          COALESCE(ca.account_type, 'SAVINGS') AS account_type, 
+          t.incident_type, t.amount_involved, t.recovered_amount, t.incident_date, 
+          t.reported_channel, t.severity, t.status, t.assigned_investigator, 
+          t.flagged_ip_or_location, t.suspect_entity, t.description, t.action_taken, 
+          t.resolution_notes, t.created_at, t.updated_at
+        FROM fraud_tickets t
+        LEFT JOIN customers c ON t.customer_id = c.customer_id
+        LEFT JOIN customer_accounts ca ON (t.customer_id = ca.customer_id AND t.account_number = ca.account_number)
         WHERE 1=1
       `;
       const params = [];
 
       if (status && status !== 'ALL') {
         params.push(status);
-        query += ` AND status = $${params.length}`;
+        query += ` AND t.status = $${params.length}`;
       }
       if (severity && severity !== 'ALL') {
         params.push(severity);
-        query += ` AND severity = $${params.length}`;
+        query += ` AND t.severity = $${params.length}`;
       }
       if (incident_type && incident_type !== 'ALL') {
         params.push(`%${incident_type}%`);
-        query += ` AND incident_type ILIKE $${params.length}`;
+        query += ` AND t.incident_type ILIKE $${params.length}`;
       }
       if (search) {
         params.push(`%${search}%`);
         const idx = params.length;
-        query += ` AND (customer_name ILIKE $${idx} OR ticket_number ILIKE $${idx} OR account_number ILIKE $${idx} OR email ILIKE $${idx})`;
+        query += ` AND (t.customer_name ILIKE $${idx} OR t.ticket_number ILIKE $${idx} OR t.account_number ILIKE $${idx} OR c.email ILIKE $${idx})`;
       }
 
-      query += ` ORDER BY incident_date DESC;`;
+      query += ` ORDER BY t.incident_date DESC, t.ticket_id DESC;`;
 
-      let result;
-      try {
-        result = await client.query(query, params);
-      } catch {
-        // Fallback to table if view doesn't exist
-        let fbQuery = `
-          SELECT ticket_id, ticket_number, customer_id, customer_name, customer_name AS full_name, '' AS email, '' AS phone, account_number, 'SAVINGS' AS account_type, incident_type, amount_involved, recovered_amount, incident_date, reported_channel, severity, status, assigned_investigator, flagged_ip_or_location, suspect_entity, description, action_taken, resolution_notes, created_at, updated_at
-          FROM fraud_tickets
-          WHERE 1=1
-        `;
-        const fbParams = [];
-        if (status && status !== 'ALL') {
-          fbParams.push(status);
-          fbQuery += ` AND status = $${fbParams.length}`;
-        }
-        if (severity && severity !== 'ALL') {
-          fbParams.push(severity);
-          fbQuery += ` AND severity = $${fbParams.length}`;
-        }
-        if (search) {
-          fbParams.push(`%${search}%`);
-          const idx = fbParams.length;
-          fbQuery += ` AND (customer_name ILIKE $${idx} OR ticket_number ILIKE $${idx} OR account_number ILIKE $${idx})`;
-        }
-        fbQuery += ` ORDER BY incident_date DESC;`;
-        result = await client.query(fbQuery, fbParams);
-      }
+      const result = await client.query(query, params);
 
       const rows = result.rows.map(r => ({
         ...r,
