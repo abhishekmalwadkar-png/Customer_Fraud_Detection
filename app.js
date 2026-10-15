@@ -1275,24 +1275,26 @@ function clearAllNotifs() {
 // -------------------------------------------------------------
 // Clear Filters & Clear Data Handlers
 // -------------------------------------------------------------
-let isComplaintsViewActive = false;
+let isComplaintsViewActive = true;
 
 async function fetchActiveComplaints() {
   const btn = document.getElementById("btnLookForActiveComplaints");
   const origHtml = btn ? btn.innerHTML : "";
   if (btn) {
     btn.disabled = true;
-    btn.innerHTML = `<i class="fa-solid fa-spinner fa-spin"></i> Loading Complaints...`;
+    btn.innerHTML = `<i class="fa-solid fa-spinner fa-spin"></i> Generating 5 Complaints...`;
   }
 
   try {
-    const res = await fetch("/api/fraud-tickets/look-for-active", {
+    const res = await fetch("/api/fraud-tickets/look-for-active?force=true", {
       method: "POST",
-      headers: { "Content-Type": "application/json" }
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ force: true })
     });
 
     if (!res.ok) {
-      throw new Error(`Server returned HTTP ${res.status}`);
+      const errText = await res.text();
+      throw new Error(`HTTP ${res.status}: ${errText}`);
     }
 
     const data = await res.json();
@@ -1323,19 +1325,15 @@ async function fetchActiveComplaints() {
     loadOverviewStats(false, true);
 
     const activeCount = allTickets.filter(t => t.status !== 'RESOLVED').length;
-    if (data.seeded && data.seeded_count > 0) {
-      showToast(`⚡ Generated & added ${data.seeded_count} random complaints to database!`, "success");
-    } else {
-      showToast(`Loaded ${activeCount} active customer complaints from database`, "success");
-    }
+    showToast(`⚡ Generated 5 new active complaints (${activeCount} active in queue)!`, "success");
   } catch (err) {
     console.error("fetchActiveComplaints error:", err);
+    showToast(`Error generating complaints: ${err.message}`, "error");
     // Graceful fallback to existing loadFraudTickets
     isComplaintsViewActive = true;
     await loadFraudTickets(true);
     ticketCurrentPage = 1;
     applyFilters();
-    showToast("Active customer complaints loaded", "info");
   } finally {
     if (btn) {
       btn.disabled = false;
@@ -1559,7 +1557,7 @@ function renderFraudTicketsTable(tickets) {
 
   const totalActiveCount = allTickets.filter(t => t.status !== 'RESOLVED').length;
 
-  if (!isComplaintsViewActive || totalActiveCount === 0) {
+  if (totalActiveCount === 0) {
     if (countEl) countEl.textContent = "0";
     if (paginationEl) paginationEl.innerHTML = "";
     const selectAllCheckbox = document.getElementById("selectAllTicketsCheckbox");

@@ -2572,10 +2572,28 @@ SAMPLE_FRAUD_TEMPLATES = [
 ]
 
 @app.api_route("/api/fraud-tickets/look-for-active", methods=["GET", "POST"], tags=["Fraud Operations"])
-async def api_look_for_active_complaints():
-    """Checks for active complaints; if 0 are present, seeds 5 random complaints into PostgreSQL."""
+@app.api_route("/api/fraud-tickets/seed-random-five", methods=["GET", "POST"], tags=["Fraud Operations"])
+async def api_look_for_active_complaints(request: Request):
+    """Checks for active complaints; seeds 5 random complaints if force is requested or 0 active."""
     import random
     from datetime import datetime, timedelta
+
+    force_seed = False
+    try:
+        force_param = request.query_params.get("force", "").lower()
+        if force_param in ("true", "1", "yes"):
+            force_seed = True
+        elif request.method == "POST":
+            force_seed = True
+            try:
+                body = await request.json()
+                if isinstance(body, dict) and body.get("force") in (False, "false", "0"):
+                    force_seed = False
+            except Exception:
+                pass
+    except Exception:
+        pass
+
     conn = get_db_connection()
     cursor = conn.cursor()
     try:
@@ -2583,7 +2601,7 @@ async def api_look_for_active_complaints():
         active_count = cursor.fetchone()[0]
         seeded_count = 0
 
-        if active_count == 0:
+        if active_count == 0 or force_seed:
             available_custs = []
             try:
                 cursor.execute("SELECT customer_id, customer_name, account_number FROM customer_accounts LIMIT 20;")
@@ -2606,7 +2624,7 @@ async def api_look_for_active_complaints():
                     cust_name = c_row[1]
                     acc_num = c_row[2]
 
-                t_num = f"FRD-2026-{int(time.time()) % 100000}{random.randint(100, 999)}"
+                t_num = f"FRD-2026-{uuid.uuid4().hex[:6].upper()}{random.randint(10, 99)}"
                 inc_date = now - timedelta(minutes=(i * 15 + 5))
                 cursor.execute("""
                     INSERT INTO fraud_tickets (

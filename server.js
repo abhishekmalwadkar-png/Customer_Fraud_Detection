@@ -1039,7 +1039,7 @@ const SAMPLE_FRAUD_TEMPLATES = [
   }
 ];
 
-// Look for Active Complaints - Seeds 5 random complaints if database is empty
+// Look for Active Complaints - Seeds 5 random complaints if requested or if 0 active
 app.all(['/api/fraud-tickets/look-for-active', '/api/fraud-tickets/seed-random-five'], async (req, res) => {
   try {
     const client = await pool.connect();
@@ -1047,11 +1047,20 @@ app.all(['/api/fraud-tickets/look-for-active', '/api/fraud-tickets/seed-random-f
       const countRes = await client.query("SELECT COUNT(*) AS total FROM fraud_tickets WHERE status != 'RESOLVED';");
       const currentActiveCount = parseInt(countRes.rows[0].total, 10);
 
+      const forceSeed = req.query.force === 'true' || 
+                        req.query.force === '1' || 
+                        req.body?.force === true || 
+                        req.body?.force === 'true' || 
+                        req.method === 'POST';
+
       let seededCount = 0;
-      if (currentActiveCount === 0) {
+      if (currentActiveCount === 0 || forceSeed) {
         // Query existing customers to link valid customer_id
-        const custRes = await client.query('SELECT customer_id, customer_name, account_number FROM customer_accounts LIMIT 20;');
-        const availableCusts = custRes.rows;
+        let availableCusts = [];
+        try {
+          const custRes = await client.query('SELECT customer_id, customer_name, account_number FROM customer_accounts LIMIT 20;');
+          availableCusts = custRes.rows;
+        } catch (e) {}
 
         // Shuffle and pick 5 random templates
         const shuffled = [...SAMPLE_FRAUD_TEMPLATES].sort(() => 0.5 - Math.random()).slice(0, 5);
@@ -1062,7 +1071,7 @@ app.all(['/api/fraud-tickets/look-for-active', '/api/fraud-tickets/seed-random-f
           const custId = linkedCust ? linkedCust.customer_id : null;
           const custName = linkedCust ? linkedCust.customer_name : t.customer_name;
           const accNum = linkedCust ? linkedCust.account_number : t.account_number;
-          const tNum = `FRD-2026-${Math.floor(9200 + Math.random() * 700)}`;
+          const tNum = `FRD-2026-${Math.random().toString(36).substring(2, 8).toUpperCase()}${Math.floor(10 + Math.random() * 89)}`;
 
           await client.query(`
             INSERT INTO fraud_tickets (
@@ -1073,7 +1082,7 @@ app.all(['/api/fraud-tickets/look-for-active', '/api/fraud-tickets/seed-random-f
             ON CONFLICT (ticket_number) DO NOTHING;
           `, [
             tNum, custId, custName, accNum, t.incident_type,
-            t.amount_involved, 0.0, (i * 15 + 5), t.reported_channel,
+            parseFloat(t.amount_involved), 0.0, (i * 15 + 5), t.reported_channel,
             t.severity, 'UNDER_INVESTIGATION', 'Andrew (SOC Operations)',
             t.suspect_entity, t.description, 'Complaint ingested into SOC queue.'
           ]);
