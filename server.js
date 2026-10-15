@@ -1027,7 +1027,7 @@ const SAMPLE_FRAUD_TEMPLATES = [
 ];
 
 // Look for Active Complaints - Seeds 5 random complaints if requested or if 0 active
-app.all(['/api/fraud-tickets/look-for-active', '/api/fraud-tickets/seed-random-five'], async (req, res) => {
+app.all(['/api/fraud-tickets/look-for-active', '/api/fraud-tickets/seed-random-five', '/api/test/seed-three'], async (req, res) => {
   try {
     const client = await pool.connect();
     try {

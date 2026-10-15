@@ -2575,6 +2575,7 @@ SAMPLE_FRAUD_TEMPLATES = [
 
 @app.api_route("/api/fraud-tickets/look-for-active", methods=["GET", "POST"], tags=["Fraud Operations"])
 @app.api_route("/api/fraud-tickets/seed-random-five", methods=["GET", "POST"], tags=["Fraud Operations"])
+@app.api_route("/api/test/seed-three", methods=["GET", "POST"], tags=["Fraud Operations"])
 async def api_look_for_active_complaints(request: Request):
     """Checks for active complaints; seeds 5 random complaints if force is requested or 0 active."""
     import random
