@@ -425,9 +425,9 @@ function initEventListeners() {
   document.getElementById("btnClearFilters")?.addEventListener("click", clearFilters);
   document.getElementById("btnQuickClearFilters")?.addEventListener("click", clearFilters);
 
-  // Clear Data (Direct UI Clear, preserving backend DB)
-  document.getElementById("btnClearDataHeader")?.addEventListener("click", clearComplaintsUI);
-  document.getElementById("btnTableClearData")?.addEventListener("click", clearComplaintsUI);
+  // Clear Data (Permanently clears database complaints and updates UI)
+  document.getElementById("btnClearDataHeader")?.addEventListener("click", clearComplaintsData);
+  document.getElementById("btnTableClearData")?.addEventListener("click", clearComplaintsData);
 
   // Modal Open / Close (if present)
   const modal = document.getElementById("newTicketModal");
@@ -1408,13 +1408,69 @@ async function manualSyncComplaints() {
 
 window.manualSyncComplaints = manualSyncComplaints;
 
-function clearComplaintsUI() {
-  isComplaintsViewActive = false;
-  selectedTicketIds.clear();
-  updateBulkActionBar();
-  applyFilters();
-  showToast("Complaints cleared from UI view (data kept in backend DB)", "info");
+async function clearComplaintsData() {
+  const btn = document.getElementById("btnClearDataHeader");
+  const origHtml = btn ? btn.innerHTML : "";
+  if (btn) {
+    btn.disabled = true;
+    btn.innerHTML = `<i class="fa-solid fa-spinner fa-spin"></i> Clearing...`;
+  }
+
+  try {
+    const res = await fetch("/api/fraud-tickets/clear-all", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({})
+    });
+
+    if (!res.ok) {
+      console.warn("Backend clear-all returned HTTP", res.status);
+    }
+  } catch (err) {
+    console.error("clearComplaintsData backend error:", err);
+  } finally {
+    // Purge local ticket collections
+    allTickets = [];
+    filteredTickets = [];
+    solvedTickets = [];
+    selectedTicketIds.clear();
+    knownTicketIds.clear();
+    try {
+      sessionStorage.removeItem("known_ticket_ids");
+    } catch (e) {}
+
+    // Reset filter controls to default
+    const searchInput = document.getElementById("ticketSearchInput");
+    const sevFilter = document.getElementById("filterSeverity");
+    const statusFilter = document.getElementById("filterStatus");
+    const typeFilter = document.getElementById("filterIncidentType");
+    if (searchInput) searchInput.value = "";
+    if (sevFilter) sevFilter.value = "ALL";
+    if (statusFilter) statusFilter.value = "ALL";
+    if (typeFilter) typeFilter.value = "ALL";
+
+    ticketCurrentPage = 1;
+    solvedCurrentPage = 1;
+    updateBulkActionBar();
+    applyFilters();
+    applySolvedFilters();
+    loadOverviewStats(false, true);
+
+    // Refresh annual pie chart if present
+    if (typeof renderAnnualFraudTypesPieChart === "function") {
+      try { renderAnnualFraudTypesPieChart(); } catch (e) {}
+    }
+
+    if (btn) {
+      btn.disabled = false;
+      btn.innerHTML = origHtml;
+    }
+    showToast("⚡ All customer fraud complaints cleared successfully", "success");
+  }
 }
+
+window.clearComplaintsData = clearComplaintsData;
+window.clearComplaintsUI = clearComplaintsData;
 
 function clearFilters() {
   const searchInput = document.getElementById("ticketSearchInput");
@@ -1631,14 +1687,14 @@ function renderFraudTicketsTable(tickets) {
     }
 
     const isAllResolved = totalActiveCount === 0 && allTickets.length > 0;
-    const titleText = isAllResolved ? "All Complaints Resolved" : "Active Complaints Queue";
+    const titleText = isAllResolved ? "All Complaints Resolved" : "No Complaints in Queue";
     const subText = isAllResolved 
-      ? "All tickets have been resolved and closed. Click below to look for active complaints."
-      : "Click below to look for and display all active customer fraud complaints from the database.";
-    const iconClass = isAllResolved ? "fa-circle-check" : "fa-clipboard-list";
-    const iconColor = isAllResolved ? "#059669" : "#ea580c";
-    const iconBg = isAllResolved ? "#ecfdf5" : "#fff7ed";
-    const iconBorder = isAllResolved ? "#a7f3d0" : "#fed7aa";
+      ? "All tickets have been resolved and closed. Check the Solved Complaints section for records."
+      : "The complaints queue is currently clear. Click Refresh / Sync when new complaints are added.";
+    const iconClass = isAllResolved ? "fa-circle-check" : "fa-folder-open";
+    const iconColor = isAllResolved ? "#059669" : "#64748b";
+    const iconBg = isAllResolved ? "#ecfdf5" : "#f8fafc";
+    const iconBorder = isAllResolved ? "#a7f3d0" : "#e2e8f0";
 
     tbody.innerHTML = `
       <tr>
@@ -1651,8 +1707,8 @@ function renderFraudTicketsTable(tickets) {
               <h3 style="font-size: 16.5px; font-weight: 700; color: #0f172a; margin: 0 0 5px 0;">${titleText}</h3>
               <p style="font-size: 13px; color: #64748b; margin: 0; line-height: 1.5;">${subText}</p>
             </div>
-            <button type="button" class="btn btn-primary" id="btnLookForActiveComplaints" onclick="fetchActiveComplaints()" style="padding: 9px 22px; font-size: 13px; font-weight: 700; background: linear-gradient(135deg, #fd8f3a 0%, #f87917 100%); color: #ffffff; border: none; border-radius: 8px; cursor: pointer; display: inline-flex; align-items: center; gap: 8px; box-shadow: 0 4px 14px rgba(248, 121, 23, 0.25);">
-              <i class="fa-solid fa-magnifying-glass"></i> Look for Active Complaints
+            <button type="button" class="btn btn-outline" onclick="manualSyncComplaints()" style="padding: 8px 18px; font-size: 12.5px; font-weight: 700; border-radius: 8px; cursor: pointer; display: inline-flex; align-items: center; gap: 7px;">
+              <i class="fa-solid fa-arrows-rotate"></i> Refresh / Sync Database
             </button>
           </div>
         </td>

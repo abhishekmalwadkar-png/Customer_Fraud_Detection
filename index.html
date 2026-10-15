@@ -317,7 +317,7 @@
           <div class="panel-actions">
             <button class="btn btn-outline" id="btnRefreshTickets" onclick="manualSyncComplaints()" title="Sync complaints with PostgreSQL database"><i class="fa-solid fa-arrows-rotate"></i> Refresh / Sync</button>
             <button class="btn btn-outline" id="btnExportTicketsCSV"><i class="fa-solid fa-download"></i> Download Excel / CSV</button>
-            <button class="btn btn-danger-outline" id="btnClearDataHeader" title="Permanently clear all customer complaints data"><i class="fa-solid fa-trash-can"></i> Clear Data</button>
+            <button class="btn btn-danger-outline" id="btnClearDataHeader" onclick="clearComplaintsData()" title="Permanently clear all customer complaints data"><i class="fa-solid fa-trash-can"></i> Clear Data</button>
           </div>
         </div>
 
@@ -1251,6 +1251,6 @@
   <!-- Toast Notification Container -->
   <div class="toast-container" id="toastContainer"></div>
 
-  <script src="app.js?v=34.0"></script>
+  <script src="app.js?v=35.0"></script>
 </body>
 </html>
