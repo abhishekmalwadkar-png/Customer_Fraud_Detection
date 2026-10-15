@@ -296,6 +296,9 @@ window.switchTab = function(targetTabId) {
     if (targetTabId === "tab-fraud-tickets") {
       try { applyFilters(); } catch (e) { console.error("applyFilters error:", e); }
     }
+    if (targetTabId === "tab-analytics") {
+      try { renderAnnualFraudTypesPieChart(); } catch (e) { console.error("renderAnnualFraudTypesPieChart error:", e); }
+    }
   } catch (err) {
     console.error("switchTab error:", err);
   }
@@ -1141,6 +1144,9 @@ async function loadFraudTickets(isBackground = false) {
     }
 
     applyFilters();
+    if (document.getElementById("tab-analytics")?.classList.contains("active")) {
+      try { renderAnnualFraudTypesPieChart(); } catch (e) {}
+    }
   } catch (err) {
     console.error("loadFraudTickets error:", err);
     if (!isBackground) {
@@ -2850,6 +2856,353 @@ async function loadAnalytics() {
     console.error("Error loading analytics:", err);
   }
 }
+
+// =============================================================
+// Annual Fraud Types Pie Chart & Threat Intelligence
+// =============================================================
+let selectedAnalyticsYear = "ALL";
+let currentPieChartData = [];
+
+const FRAUD_TYPE_PALETTE = [
+  "#6366f1", // Indigo
+  "#0ea5e9", // Sky
+  "#10b981", // Emerald
+  "#f59e0b", // Amber
+  "#f43f5e", // Rose
+  "#8b5cf6", // Purple
+  "#06b6d4", // Cyan
+  "#ec4899", // Pink
+  "#14b8a6", // Teal
+  "#d946ef", // Fuchsia
+  "#eab308", // Yellow
+  "#64748b"  // Slate
+];
+
+function getTicketYear(ticket) {
+  if (!ticket) return "2026";
+  if (ticket.incident_date) {
+    const d = new Date(ticket.incident_date);
+    if (!isNaN(d.getFullYear()) && d.getFullYear() > 2000) return String(d.getFullYear());
+  }
+  if (ticket.created_at) {
+    const d = new Date(ticket.created_at);
+    if (!isNaN(d.getFullYear()) && d.getFullYear() > 2000) return String(d.getFullYear());
+  }
+  return "2026";
+}
+
+function getDonutSlicePath(cx, cy, rOuter, rInner, startAngle, endAngle) {
+  if (endAngle - startAngle >= 2 * Math.PI - 0.0001) {
+    endAngle = startAngle + 2 * Math.PI - 0.0001;
+  }
+  const a1 = startAngle - Math.PI / 2;
+  const a2 = endAngle - Math.PI / 2;
+  const largeArc = (endAngle - startAngle) > Math.PI ? 1 : 0;
+
+  const x1 = cx + rOuter * Math.cos(a1);
+  const y1 = cy + rOuter * Math.sin(a1);
+  const x2 = cx + rOuter * Math.cos(a2);
+  const y2 = cy + rOuter * Math.sin(a2);
+
+  const x3 = cx + rInner * Math.cos(a2);
+  const y3 = cy + rInner * Math.sin(a2);
+  const x4 = cx + rInner * Math.cos(a1);
+  const y4 = cy + rInner * Math.sin(a1);
+
+  return `M ${x1.toFixed(2)} ${y1.toFixed(2)} A ${rOuter} ${rOuter} 0 ${largeArc} 1 ${x2.toFixed(2)} ${y2.toFixed(2)} L ${x3.toFixed(2)} ${y3.toFixed(2)} A ${rInner} ${rInner} 0 ${largeArc} 0 ${x4.toFixed(2)} ${y4.toFixed(2)} Z`;
+}
+
+window.onAnalyticsYearChange = function(year) {
+  selectedAnalyticsYear = String(year || "ALL").toUpperCase();
+
+  // Sync dropdown
+  const select = document.getElementById("selectAnalyticsYear");
+  if (select && select.value !== selectedAnalyticsYear) {
+    select.value = selectedAnalyticsYear;
+  }
+
+  // Sync pill buttons
+  document.querySelectorAll("#analyticsYearPills .year-pill-btn").forEach(btn => {
+    if (btn.getAttribute("data-year") === selectedAnalyticsYear) {
+      btn.classList.add("active");
+    } else {
+      btn.classList.remove("active");
+    }
+  });
+
+  renderAnnualFraudTypesPieChart();
+};
+
+function renderAnnualFraudTypesPieChart() {
+  const chartContainer = document.getElementById("fraudTypesPieChartSvgContainer");
+  const legendContainer = document.getElementById("fraudTypesLegendContainer");
+  if (!chartContainer || !legendContainer) return;
+
+  // Ensure allTickets is populated
+  if (!allTickets || allTickets.length === 0) {
+    loadFraudTickets(true).then(() => renderAnnualFraudTypesPieChart());
+    return;
+  }
+
+  // Extract available years dynamically
+  const yearSet = new Set();
+  allTickets.forEach(t => {
+    const y = getTicketYear(t);
+    if (y) yearSet.add(y);
+  });
+  const availableYears = Array.from(yearSet).sort((a, b) => Number(b) - Number(a));
+
+  // Sync year dropdown options dynamically
+  const selectYearEl = document.getElementById("selectAnalyticsYear");
+  if (selectYearEl && availableYears.length > 0) {
+    const currentOpts = Array.from(selectYearEl.options).map(o => o.value);
+    const neededOpts = ["ALL", ...availableYears];
+    const isDifferent = neededOpts.some(val => !currentOpts.includes(val)) || neededOpts.length !== currentOpts.length;
+    if (isDifferent) {
+      selectYearEl.innerHTML = `<option value="ALL">All Recorded Years</option>` + 
+        availableYears.map(y => `<option value="${y}">${y}${y === '2026' ? ' (Current Year)' : ''}</option>`).join("");
+      selectYearEl.value = selectedAnalyticsYear;
+    }
+  }
+
+  // Sync year pills
+  const pillsContainer = document.getElementById("analyticsYearPills");
+  if (pillsContainer && availableYears.length > 0) {
+    pillsContainer.innerHTML = `
+      <button type="button" class="year-pill-btn ${selectedAnalyticsYear === 'ALL' ? 'active' : ''}" onclick="onAnalyticsYearChange('ALL')" data-year="ALL"><i class="fa-solid fa-clock-rotate-left"></i> All Years</button>
+      ${availableYears.map(y => `
+        <button type="button" class="year-pill-btn ${selectedAnalyticsYear === y ? 'active' : ''}" onclick="onAnalyticsYearChange('${y}')" data-year="${y}">${y}</button>
+      `).join("")}
+    `;
+  }
+
+  // Filter tickets by selected year
+  const filtered = selectedAnalyticsYear === "ALL" 
+    ? allTickets 
+    : allTickets.filter(t => getTicketYear(t) === selectedAnalyticsYear);
+
+  const totalCases = filtered.length;
+  const totalAmount = filtered.reduce((sum, t) => sum + (parseFloat(t.amount_involved) || 0), 0);
+
+  // Group by incident_type
+  const typeMap = {};
+  filtered.forEach(t => {
+    const rawType = t.incident_type || "Other Unauthorized Activity";
+    if (!typeMap[rawType]) {
+      typeMap[rawType] = { count: 0, amount: 0 };
+    }
+    typeMap[rawType].count += 1;
+    typeMap[rawType].amount += (parseFloat(t.amount_involved) || 0);
+  });
+
+  const sortedTypes = Object.entries(typeMap)
+    .map(([type, data]) => ({ type, count: data.count, amount: data.amount }))
+    .sort((a, b) => b.count - a.count || b.amount - a.amount);
+
+  // If more than 7 categories, collapse tail into "Other Vectors" for readability
+  let displayCategories = [];
+  if (sortedTypes.length > 7) {
+    displayCategories = sortedTypes.slice(0, 6);
+    const otherCount = sortedTypes.slice(6).reduce((acc, c) => acc + c.count, 0);
+    const otherAmount = sortedTypes.slice(6).reduce((acc, c) => acc + c.amount, 0);
+    displayCategories.push({
+      type: "Other Specialized Fraud Vectors",
+      count: otherCount,
+      amount: otherAmount
+    });
+  } else {
+    displayCategories = sortedTypes;
+  }
+
+  // Assign colors and percentage
+  displayCategories = displayCategories.map((item, idx) => {
+    const pct = totalCases > 0 ? (item.count / totalCases * 100) : 0;
+    return {
+      ...item,
+      pct: parseFloat(pct.toFixed(1)),
+      color: FRAUD_TYPE_PALETTE[idx % FRAUD_TYPE_PALETTE.length]
+    };
+  });
+
+  currentPieChartData = displayCategories;
+
+  // Update Summary Metric Badges
+  const statCasesEl = document.getElementById("statYearTotalCases");
+  const statAmountEl = document.getElementById("statYearTotalAmount");
+  const statTopCatEl = document.getElementById("statYearTopCategory");
+  const pieTitleEl = document.getElementById("fraudPieTitle");
+  const pieSubtitleEl = document.getElementById("fraudPieSubtitle");
+
+  const yearLabel = selectedAnalyticsYear === "ALL" ? "All Recorded Years" : `Year ${selectedAnalyticsYear}`;
+  if (pieTitleEl) pieTitleEl.textContent = `Fraud Types Received (${yearLabel})`;
+  if (pieSubtitleEl) pieSubtitleEl.textContent = `Detailed scam taxonomy and volume breakdown for ${yearLabel.toLowerCase()}`;
+  if (statCasesEl) statCasesEl.textContent = `${totalCases.toLocaleString("en-IN")} Cases`;
+  if (statAmountEl) statAmountEl.textContent = formatCurrency(totalAmount);
+  if (statTopCatEl) {
+    if (displayCategories.length > 0) {
+      statTopCatEl.textContent = `${displayCategories[0].type} (${displayCategories[0].pct}%)`;
+      statTopCatEl.title = `${displayCategories[0].type} - ${displayCategories[0].count} cases`;
+    } else {
+      statTopCatEl.textContent = "No Cases Recorded";
+    }
+  }
+
+  // If no data
+  if (totalCases === 0) {
+    chartContainer.innerHTML = `
+      <div style="text-align: center; color: #94a3b8; padding: 40px 10px;">
+        <i class="fa-solid fa-chart-pie" style="font-size: 42px; color: #cbd5e1; margin-bottom: 10px;"></i>
+        <div style="font-size: 14px; font-weight: 700; color: #475569;">No complaints for ${selectedAnalyticsYear}</div>
+        <div style="font-size: 12px; margin-top: 4px;">Select "All Years" or switch years above</div>
+      </div>
+    `;
+    legendContainer.innerHTML = `
+      <div style="text-align: center; color: #94a3b8; padding: 40px 10px;">
+        <button class="btn btn-xs btn-outline" onclick="onAnalyticsYearChange('ALL')" style="cursor: pointer;">
+          <i class="fa-solid fa-rotate-left"></i> View All Years
+        </button>
+      </div>
+    `;
+    return;
+  }
+
+  // Build SVG Pie Chart
+  const cx = 145;
+  const cy = 145;
+  const rOuter = 120;
+  const rInner = 68;
+
+  let currentAngle = 0;
+  const slicePaths = displayCategories.map((item, idx) => {
+    const sliceAngle = (item.count / totalCases) * 2 * Math.PI;
+    const startAngle = currentAngle;
+    const endAngle = currentAngle + sliceAngle;
+    currentAngle = endAngle;
+
+    const pathD = getDonutSlicePath(cx, cy, rOuter, rInner, startAngle, endAngle);
+    return `
+      <path 
+        d="${pathD}" 
+        fill="${item.color}" 
+        class="pie-slice" 
+        id="pieSlice_${idx}" 
+        data-index="${idx}"
+        onmouseenter="window.onHoverPieSlice(${idx})" 
+        onmouseleave="window.onLeavePieSlice()"
+        style="transition: all 0.25s cubic-bezier(0.34, 1.56, 0.64, 1); transform-origin: ${cx}px ${cy}px;"
+      >
+        <title>${item.type}: ${item.count} cases (${item.pct}%) - ${formatCurrency(item.amount)}</title>
+      </path>
+    `;
+  }).join("");
+
+  chartContainer.innerHTML = `
+    <svg viewBox="0 0 290 290" width="280" height="280" style="overflow: visible; filter: drop-shadow(0 4px 12px rgba(0,0,0,0.06));">
+      <g id="pieSlicesGroup">
+        ${slicePaths}
+      </g>
+      <!-- Center Circle Cutout & Dynamic Label -->
+      <circle cx="${cx}" cy="${cy}" r="${rInner - 2}" fill="#ffffff"></circle>
+      <g class="pie-center-label" pointer-events="none">
+        <text x="${cx}" y="${cy - 4}" text-anchor="middle" font-size="28" font-weight="800" fill="#0f172a" id="pieCenterCount">${totalCases}</text>
+        <text x="${cx}" y="${cy + 16}" text-anchor="middle" font-size="11" font-weight="700" fill="#64748b" text-transform="uppercase" letter-spacing="0.5" id="pieCenterLabel">${selectedAnalyticsYear === 'ALL' ? 'Total Cases' : selectedAnalyticsYear}</text>
+      </g>
+    </svg>
+  `;
+
+  // Build Right-Side Interactive Breakdown List
+  legendContainer.innerHTML = displayCategories.map((item, idx) => `
+    <div class="pie-legend-row" id="legendRow_${idx}" onmouseenter="window.onHoverPieSlice(${idx})" onmouseleave="window.onLeavePieSlice()">
+      <div style="display: flex; justify-content: space-between; align-items: flex-start; gap: 8px;">
+        <div style="display: flex; align-items: center; gap: 8px; min-width: 0;">
+          <div style="width: 12px; height: 12px; border-radius: 3px; background: ${item.color}; flex-shrink: 0;"></div>
+          <span style="font-size: 13px; font-weight: 700; color: #1e293b; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;" title="${item.type}">
+            ${escapeHtml(item.type)}
+          </span>
+        </div>
+        <div style="display: flex; align-items: center; gap: 8px; flex-shrink: 0;">
+          <span style="font-size: 12.5px; font-weight: 700; color: #0f172a;">${item.count} <span style="font-size: 11px; font-weight: 500; color: #64748b;">cases</span></span>
+          <span style="font-size: 11px; font-weight: 700; padding: 2px 7px; border-radius: 4px; background: #f1f5f9; color: #334155;">${item.pct}%</span>
+          <span style="font-size: 12px; font-weight: 700; color: #ea580c; min-width: 75px; text-align: right;">${formatCurrency(item.amount)}</span>
+        </div>
+      </div>
+      <div class="pie-legend-bar-wrap">
+        <div class="pie-legend-bar-fill" style="width: ${item.pct}%; background: ${item.color};"></div>
+      </div>
+    </div>
+  `).join("");
+}
+
+window.onHoverPieSlice = function(idx) {
+  if (!currentPieChartData || !currentPieChartData[idx]) return;
+  const item = currentPieChartData[idx];
+
+  // Scale selected slice, dim others
+  document.querySelectorAll(".pie-slice").forEach((slice, i) => {
+    if (i === idx) {
+      slice.style.transform = "scale(1.06)";
+      slice.style.opacity = "1";
+    } else {
+      slice.style.transform = "scale(1)";
+      slice.style.opacity = "0.45";
+    }
+  });
+
+  // Highlight legend row
+  document.querySelectorAll(".pie-legend-row").forEach((row, i) => {
+    if (i === idx) {
+      row.classList.add("highlighted");
+      row.style.background = "#fff7ed";
+      row.style.borderColor = "#fed7aa";
+    } else {
+      row.classList.remove("highlighted");
+      row.style.background = "#ffffff";
+      row.style.borderColor = "#f1f5f9";
+    }
+  });
+
+  // Update central readout to hovered category details
+  const centerCountEl = document.getElementById("pieCenterCount");
+  const centerLabelEl = document.getElementById("pieCenterLabel");
+  if (centerCountEl) {
+    centerCountEl.textContent = `${item.count}`;
+    centerCountEl.style.fill = item.color;
+  }
+  if (centerLabelEl) {
+    centerLabelEl.textContent = `${item.pct}% Share`;
+    centerLabelEl.style.fill = item.color;
+  }
+};
+
+window.onLeavePieSlice = function() {
+  // Restore slices
+  document.querySelectorAll(".pie-slice").forEach(slice => {
+    slice.style.transform = "scale(1)";
+    slice.style.opacity = "1";
+  });
+
+  // Restore legend rows
+  document.querySelectorAll(".pie-legend-row").forEach(row => {
+    row.classList.remove("highlighted");
+    row.style.background = "#ffffff";
+    row.style.borderColor = "#f1f5f9";
+  });
+
+  // Restore center readout
+  const total = currentPieChartData.reduce((acc, c) => acc + c.count, 0);
+  const centerCountEl = document.getElementById("pieCenterCount");
+  const centerLabelEl = document.getElementById("pieCenterLabel");
+  if (centerCountEl) {
+    centerCountEl.textContent = String(total);
+    centerCountEl.style.fill = "#0f172a";
+  }
+  if (centerLabelEl) {
+    centerLabelEl.textContent = selectedAnalyticsYear === "ALL" ? "Total Cases" : selectedAnalyticsYear;
+    centerLabelEl.style.fill = "#64748b";
+  }
+};
+
+window.renderAnnualFraudTypesPieChart = renderAnnualFraudTypesPieChart;
 
 // 11. Audit Logs
 async function loadAuditLogs() {

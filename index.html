@@ -10,7 +10,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=JetBrains+Mono:wght@500;600&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="styles.css?v=18.0">
+  <link rel="stylesheet" href="styles.css?v=19.0">
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
 </head>
 <body class="bank-portal-theme">
@@ -719,8 +719,93 @@
       <section class="tab-panel" id="tab-analytics">
         <div class="panel-header">
           <div>
-            <h1 class="panel-title">Understanding Common Banking Scams</h1>
-            <p class="panel-subtitle">Guide to common fraud methods and safety steps to protect customer accounts.</p>
+            <h1 class="panel-title">Fraud Analytics & Threat Intelligence</h1>
+            <p class="panel-subtitle">Comprehensive breakdown of scam vectors, annual threat distribution, and risk classifications.</p>
+          </div>
+          <div class="panel-actions">
+            <div class="year-filter-wrapper" style="display: flex; align-items: center; gap: 8px;">
+              <label for="selectAnalyticsYear" style="font-size: 13px; font-weight: 600; color: #475569; display: flex; align-items: center; gap: 5px;">
+                <i class="fa-solid fa-calendar-days" style="color: #ea580c;"></i> Filter by Year:
+              </label>
+              <select id="selectAnalyticsYear" class="form-select" onchange="onAnalyticsYearChange(this.value)" style="padding: 7px 14px; font-size: 13px; font-weight: 700; border-radius: 8px; border: 1px solid #fed7aa; background: #ffffff; color: #0f172a; cursor: pointer; box-shadow: 0 1px 3px rgba(0,0,0,0.05);">
+                <option value="ALL">All Recorded Years</option>
+                <option value="2026">2026 (Current Year)</option>
+                <option value="2025">2025</option>
+                <option value="2024">2024</option>
+              </select>
+            </div>
+          </div>
+        </div>
+
+        <!-- Annual Fraud Types Pie Chart Showcase Card -->
+        <div class="dash-card" style="margin-bottom: 24px; box-shadow: 0 4px 20px rgba(0,0,0,0.04); border: 1px solid #f1f5f9; border-radius: 12px; overflow: hidden; background: #ffffff;">
+          <div class="dash-card-header" style="display: flex; justify-content: space-between; align-items: center; padding: 16px 20px; border-bottom: 1px solid #f8fafc; background: #ffffff; flex-wrap: wrap; gap: 12px;">
+            <div style="display: flex; align-items: center; gap: 10px;">
+              <div style="width: 36px; height: 36px; border-radius: 8px; background: #fff7ed; color: #ea580c; display: flex; align-items: center; justify-content: center; font-size: 17px; border: 1px solid #fed7aa;">
+                <i class="fa-solid fa-chart-pie"></i>
+              </div>
+              <div>
+                <strong style="font-size: 15.5px; color: #0f172a; font-weight: 700;" id="fraudPieTitle">Fraud Types Received per Year</strong>
+                <p style="font-size: 12px; color: #64748b; margin: 0;" id="fraudPieSubtitle">Live breakdown of customer fraud scam categories and annual proportion share</p>
+              </div>
+            </div>
+            <div style="display: flex; gap: 6px; flex-wrap: wrap;" id="analyticsYearPills">
+              <button type="button" class="year-pill-btn active" onclick="onAnalyticsYearChange('ALL')" data-year="ALL"><i class="fa-solid fa-clock-rotate-left"></i> All Years</button>
+              <button type="button" class="year-pill-btn" onclick="onAnalyticsYearChange('2026')" data-year="2026">2026</button>
+              <button type="button" class="year-pill-btn" onclick="onAnalyticsYearChange('2025')" data-year="2025">2025</button>
+              <button type="button" class="year-pill-btn" onclick="onAnalyticsYearChange('2024')" data-year="2024">2024</button>
+            </div>
+          </div>
+
+          <!-- Summary Metric Badges for the Selected Year -->
+          <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 14px; padding: 14px 20px; background: #fafafa; border-bottom: 1px solid #f1f5f9;">
+            <div style="background: #ffffff; border: 1px solid #e2e8f0; border-radius: 8px; padding: 12px 16px; display: flex; align-items: center; gap: 12px;">
+              <div style="width: 38px; height: 38px; border-radius: 8px; background: #eff6ff; color: #2563eb; display: flex; align-items: center; justify-content: center; font-size: 17px;">
+                <i class="fa-solid fa-file-shield"></i>
+              </div>
+              <div>
+                <span style="font-size: 11px; color: #64748b; font-weight: 700; text-transform: uppercase; letter-spacing: 0.3px;">Complaints Count</span>
+                <div style="font-size: 18px; font-weight: 800; color: #0f172a;" id="statYearTotalCases">0 Cases</div>
+              </div>
+            </div>
+
+            <div style="background: #ffffff; border: 1px solid #e2e8f0; border-radius: 8px; padding: 12px 16px; display: flex; align-items: center; gap: 12px;">
+              <div style="width: 38px; height: 38px; border-radius: 8px; background: #fef2f2; color: #dc2626; display: flex; align-items: center; justify-content: center; font-size: 17px;">
+                <i class="fa-solid fa-indian-rupee-sign"></i>
+              </div>
+              <div>
+                <span style="font-size: 11px; color: #64748b; font-weight: 700; text-transform: uppercase; letter-spacing: 0.3px;">Amount at Risk</span>
+                <div style="font-size: 18px; font-weight: 800; color: #dc2626;" id="statYearTotalAmount">₹0</div>
+              </div>
+            </div>
+
+            <div style="background: #ffffff; border: 1px solid #e2e8f0; border-radius: 8px; padding: 12px 16px; display: flex; align-items: center; gap: 12px;">
+              <div style="width: 38px; height: 38px; border-radius: 8px; background: #f5f3ff; color: #7c3aed; display: flex; align-items: center; justify-content: center; font-size: 17px;">
+                <i class="fa-solid fa-triangle-exclamation"></i>
+              </div>
+              <div style="min-width: 0;">
+                <span style="font-size: 11px; color: #64748b; font-weight: 700; text-transform: uppercase; letter-spacing: 0.3px;">Top Threat Vector</span>
+                <div style="font-size: 13.5px; font-weight: 700; color: #0f172a; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;" id="statYearTopCategory">-</div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Main Layout: Left Side Interactive Pie Chart, Right Side Ranked Breakdown -->
+          <div style="display: grid; grid-template-columns: 360px 1fr; gap: 24px; padding: 24px 20px; align-items: center;" id="pieChartLayoutWrapper">
+            <!-- Left: Pie Chart Graphic -->
+            <div style="display: flex; flex-direction: column; align-items: center; justify-content: center; position: relative;">
+              <div id="fraudTypesPieChartSvgContainer" style="width: 290px; height: 290px; position: relative; display: flex; align-items: center; justify-content: center;">
+                <!-- SVG Pie Chart injected dynamically -->
+              </div>
+              <div style="margin-top: 12px; font-size: 11.5px; color: #94a3b8; display: flex; align-items: center; gap: 6px;">
+                <i class="fa-solid fa-circle-info" style="color: #ea580c;"></i> Hover segments to view share and amount
+              </div>
+            </div>
+
+            <!-- Right: Interactive Ranked Types Breakdown & Percentage Bars -->
+            <div style="max-height: 380px; overflow-y: auto; padding-right: 8px;" id="fraudTypesLegendContainer">
+              <!-- Dynamically populated with type breakdown rows -->
+            </div>
           </div>
         </div>
 
@@ -1166,6 +1251,6 @@
   <!-- Toast Notification Container -->
   <div class="toast-container" id="toastContainer"></div>
 
-  <script src="app.js?v=33.0"></script>
+  <script src="app.js?v=34.0"></script>
 </body>
 </html>
