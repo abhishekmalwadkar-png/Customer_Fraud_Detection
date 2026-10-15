@@ -3873,7 +3873,7 @@ def api_get_transactions(
         total_count = None
         
         if is_paginated:
-            count_sql = f"SELECT COUNT(*) FROM transactions t JOIN customers c ON t.customer_id = c.customer_id {where_sql};"
+            count_sql = f"SELECT COUNT(*) FROM transactions t LEFT JOIN customers c ON t.customer_id = c.customer_id {where_sql};"
             cursor.execute(count_sql, tuple(params))
             total_count = cursor.fetchone()[0]
             
@@ -3886,11 +3886,11 @@ def api_get_transactions(
             
         sql = f"""
             SELECT 
-                t.txn_id, t.txn_reference, t.customer_id, c.full_name, t.account_number,
+                t.txn_id, t.txn_reference, t.customer_id, COALESCE(c.full_name, t.customer_name) AS full_name, t.account_number,
                 t.amount, t.txn_type, t.merchant_or_recipient, t.channel, t.ip_address,
                 t.is_fraud_flagged, t.fraud_risk_score, t.status, t.txn_time
             FROM transactions t
-            JOIN customers c ON t.customer_id = c.customer_id
+            LEFT JOIN customers c ON t.customer_id = c.customer_id
             {where_sql}
             ORDER BY t.txn_time DESC, t.txn_id DESC
             {limit_sql};

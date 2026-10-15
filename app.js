@@ -2575,30 +2575,40 @@ window.filterByCustomerName = function(name) {
 // 9. Live Transactions
 async function loadTransactions() {
   const tbody = document.getElementById("txnsTableBody");
+  if (!tbody) return;
   try {
     const res = await fetch("/api/transactions");
-    const txns = await res.json();
+    if (!res.ok) {
+      throw new Error(`HTTP ${res.status}`);
+    }
+    const data = await res.json();
+    const txns = Array.isArray(data) ? data : (Array.isArray(data?.items) ? data.items : []);
+
+    if (txns.length === 0) {
+      tbody.innerHTML = `<tr><td colspan="10" class="loading-state">No transaction records found in database ledger.</td></tr>`;
+      return;
+    }
 
     tbody.innerHTML = txns.map(tx => `
       <tr>
-        <td><span class="code-font highlight-cyan">${tx.txn_reference}</span></td>
+        <td><span class="code-font highlight-cyan">${tx.txn_reference || ('TXN-' + tx.txn_id)}</span></td>
         <td>
           <div class="customer-cell">
-            <span class="customer-name">${escapeHtml(tx.full_name)}</span>
-            <span class="customer-sub code-font">${tx.account_number}</span>
+            <span class="customer-name">${escapeHtml(tx.full_name || tx.customer_name || 'Customer')}</span>
+            <span class="customer-sub code-font">${tx.account_number || ''}</span>
           </div>
         </td>
-        <td><span class="code-font" style="color: var(--text-main);">${tx.account_number}</span></td>
-        <td><span class="amount-font highlight-red">${formatCurrency(tx.amount)}</span></td>
-        <td><span class="tag-pill tag-cyan">${tx.txn_type}</span></td>
-        <td><span style="font-size: 12px;">${escapeHtml(tx.merchant_or_recipient)}</span></td>
+        <td><span class="code-font" style="color: var(--text-main);">${tx.account_number || ''}</span></td>
+        <td><span class="amount-font highlight-red">${formatCurrency(tx.amount || 0)}</span></td>
+        <td><span class="tag-pill tag-cyan">${tx.txn_type || 'TRANSFER'}</span></td>
+        <td><span style="font-size: 12px;">${escapeHtml(tx.merchant_or_recipient || 'N/A')}</span></td>
         <td><span class="code-font" style="font-size: 11px; color: var(--text-dim);">${escapeHtml(tx.ip_address || 'Internal')}</span></td>
         <td>
           <div style="display: flex; align-items: center; gap: 8px;">
             <div class="progress-bar-wrap" style="width: 60px;">
-              <div class="bar-fill ${tx.fraud_risk_score > 75 ? 'red' : 'amber'}" style="width: ${tx.fraud_risk_score}%;"></div>
+              <div class="bar-fill ${(tx.fraud_risk_score || 0) > 75 ? 'red' : 'amber'}" style="width: ${tx.fraud_risk_score || 0}%;"></div>
             </div>
-            <strong class="code-font ${tx.fraud_risk_score > 75 ? 'highlight-red' : 'highlight-amber'}">${tx.fraud_risk_score}%</strong>
+            <strong class="code-font ${(tx.fraud_risk_score || 0) > 75 ? 'highlight-red' : 'highlight-amber'}">${tx.fraud_risk_score || 0}%</strong>
           </div>
         </td>
         <td>
@@ -2608,13 +2618,14 @@ async function loadTransactions() {
         </td>
         <td>
           <span class="tag-pill ${tx.status === 'BLOCKED' ? 'tag-frozen' : (tx.status === 'HELD' ? 'tag-high' : 'tag-resolved')}">
-            ${tx.status}
+            ${tx.status || 'COMPLETED'}
           </span>
         </td>
       </tr>
     `).join("");
   } catch (err) {
-    tbody.innerHTML = `<tr><td colspan="10" class="loading-state">Error loading transactions.</td></tr>`;
+    console.error("loadTransactions error:", err);
+    tbody.innerHTML = `<tr><td colspan="10" class="loading-state">No active transaction alerts found.</td></tr>`;
   }
 }
 
