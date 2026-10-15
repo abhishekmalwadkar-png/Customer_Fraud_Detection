@@ -415,10 +415,8 @@ function initEventListeners() {
     });
   }
 
-  // Refresh & Export buttons
-  document.getElementById("btnRefreshTickets")?.addEventListener("click", manualSyncComplaints);
-
-  document.getElementById("btnExportTicketsCSV").addEventListener("click", exportTicketsCSV);
+  // Export button
+  document.getElementById("btnExportTicketsCSV")?.addEventListener("click", exportTicketsCSV);
 
   // Clear Filters listeners
   document.getElementById("btnClearFilters")?.addEventListener("click", clearFilters);
@@ -1356,38 +1354,49 @@ async function fetchActiveComplaints() {
 
 window.fetchActiveComplaints = fetchActiveComplaints;
 
+let isSyncingComplaints = false;
 async function manualSyncComplaints() {
+  if (isSyncingComplaints) return;
+  isSyncingComplaints = true;
+
   const btn = document.getElementById("btnRefreshTickets");
-  const origHtml = btn ? btn.innerHTML : "";
+  const defaultHtml = `<i class="fa-solid fa-arrows-rotate"></i> Refresh / Sync`;
   if (btn) {
-    btn.disabled = true;
     btn.innerHTML = `<i class="fa-solid fa-arrows-rotate fa-spin"></i> Syncing...`;
+    btn.style.pointerEvents = "none";
   }
 
   try {
     const prevKnownCount = knownTicketIds.size;
     await Promise.all([
-      loadFraudTickets(false),
-      loadOverviewStats(false, true)
+      loadFraudTickets(true),
+      loadOverviewStats(true, false)
     ]);
-    ticketCurrentPage = 1;
     applyFilters();
 
     const activeCount = allTickets.filter(t => t.status !== 'RESOLVED').length;
     const newCount = knownTicketIds.size - prevKnownCount;
+
+    if (btn) {
+      btn.innerHTML = `<i class="fa-solid fa-check" style="color: #16a34a;"></i> Synced!`;
+    }
+
     if (newCount > 0) {
-      showToast(`⚡ Synced with database! Added ${newCount} new complaint${newCount > 1 ? 's' : ''} (${activeCount} active in queue).`, "success");
+      showToast(`⚡ Added ${newCount} new complaint${newCount > 1 ? 's' : ''} (${activeCount} active).`, "success");
     } else {
-      showToast(`⚡ Synced with database! Queue is up to date (${activeCount} active).`, "success");
+      showToast(`⚡ Database synced! ${activeCount} active complaints in queue.`, "success");
     }
   } catch (err) {
     console.error("manualSyncComplaints error:", err);
-    showToast("Failed to sync with database: " + err.message, "error");
+    showToast("Sync error: " + err.message, "error");
   } finally {
-    if (btn) {
-      btn.disabled = false;
-      btn.innerHTML = origHtml;
-    }
+    setTimeout(() => {
+      if (btn) {
+        btn.innerHTML = defaultHtml;
+        btn.style.pointerEvents = "";
+      }
+      isSyncingComplaints = false;
+    }, 350);
   }
 }
 
