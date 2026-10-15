@@ -416,10 +416,7 @@ function initEventListeners() {
   }
 
   // Refresh & Export buttons
-  document.getElementById("btnRefreshTickets")?.addEventListener("click", () => {
-    loadAllData();
-    showToast("Refreshed data from PostgreSQL database", "success");
-  });
+  document.getElementById("btnRefreshTickets")?.addEventListener("click", manualSyncComplaints);
 
   document.getElementById("btnExportTicketsCSV").addEventListener("click", exportTicketsCSV);
 
@@ -1358,6 +1355,43 @@ async function fetchActiveComplaints() {
 }
 
 window.fetchActiveComplaints = fetchActiveComplaints;
+
+async function manualSyncComplaints() {
+  const btn = document.getElementById("btnRefreshTickets");
+  const origHtml = btn ? btn.innerHTML : "";
+  if (btn) {
+    btn.disabled = true;
+    btn.innerHTML = `<i class="fa-solid fa-arrows-rotate fa-spin"></i> Syncing...`;
+  }
+
+  try {
+    const prevKnownCount = knownTicketIds.size;
+    await Promise.all([
+      loadFraudTickets(false),
+      loadOverviewStats(false, true)
+    ]);
+    ticketCurrentPage = 1;
+    applyFilters();
+
+    const activeCount = allTickets.filter(t => t.status !== 'RESOLVED').length;
+    const newCount = knownTicketIds.size - prevKnownCount;
+    if (newCount > 0) {
+      showToast(`⚡ Synced with database! Added ${newCount} new complaint${newCount > 1 ? 's' : ''} (${activeCount} active in queue).`, "success");
+    } else {
+      showToast(`⚡ Synced with database! Queue is up to date (${activeCount} active).`, "success");
+    }
+  } catch (err) {
+    console.error("manualSyncComplaints error:", err);
+    showToast("Failed to sync with database: " + err.message, "error");
+  } finally {
+    if (btn) {
+      btn.disabled = false;
+      btn.innerHTML = origHtml;
+    }
+  }
+}
+
+window.manualSyncComplaints = manualSyncComplaints;
 
 function clearComplaintsUI() {
   isComplaintsViewActive = false;

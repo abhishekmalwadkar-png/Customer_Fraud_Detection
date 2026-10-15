@@ -315,6 +315,7 @@
             <p class="panel-subtitle">View and manage all complaints raised by customers regarding unauthorized charges and scams.</p>
           </div>
           <div class="panel-actions">
+            <button class="btn btn-outline" id="btnRefreshTickets" onclick="manualSyncComplaints()" title="Sync complaints with PostgreSQL database"><i class="fa-solid fa-arrows-rotate"></i> Refresh / Sync</button>
             <button class="btn btn-outline" id="btnExportTicketsCSV"><i class="fa-solid fa-download"></i> Download Excel / CSV</button>
             <button class="btn btn-danger-outline" id="btnClearDataHeader" title="Permanently clear all customer complaints data"><i class="fa-solid fa-trash-can"></i> Clear Data</button>
           </div>
@@ -1165,6 +1166,6 @@
   <!-- Toast Notification Container -->
   <div class="toast-container" id="toastContainer"></div>
 
-  <script src="app.js?v=31.0"></script>
+  <script src="app.js?v=32.0"></script>
 </body>
 </html>
