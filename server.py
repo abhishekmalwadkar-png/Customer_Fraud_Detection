@@ -2575,6 +2575,7 @@ SAMPLE_FRAUD_TEMPLATES = [
 async def api_look_for_active_complaints():
     """Checks for active complaints; if 0 are present, seeds 5 random complaints into PostgreSQL."""
     import random
+    from datetime import datetime, timedelta
     conn = get_db_connection()
     cursor = conn.cursor()
     try:
@@ -2583,12 +2584,17 @@ async def api_look_for_active_complaints():
         seeded_count = 0
 
         if active_count == 0:
-            cursor.execute("SELECT customer_id, customer_name, account_number FROM customer_accounts LIMIT 20;")
-            available_custs = cursor.fetchall()
+            available_custs = []
+            try:
+                cursor.execute("SELECT customer_id, customer_name, account_number FROM customer_accounts LIMIT 20;")
+                available_custs = cursor.fetchall()
+            except Exception:
+                pass
 
             shuffled = list(SAMPLE_FRAUD_TEMPLATES)
             random.shuffle(shuffled)
             selected = shuffled[:5]
+            now = datetime.now()
 
             for i, t in enumerate(selected):
                 cust_id = None
@@ -2600,17 +2606,18 @@ async def api_look_for_active_complaints():
                     cust_name = c_row[1]
                     acc_num = c_row[2]
 
-                t_num = f"FRD-2026-{random.randint(9200, 9999)}"
+                t_num = f"FRD-2026-{int(time.time()) % 100000}{random.randint(100, 999)}"
+                inc_date = now - timedelta(minutes=(i * 15 + 5))
                 cursor.execute("""
                     INSERT INTO fraud_tickets (
                         ticket_number, customer_id, customer_name, account_number, incident_type,
                         amount_involved, recovered_amount, incident_date, reported_channel,
                         severity, status, assigned_investigator, suspect_entity, description, action_taken
-                    ) VALUES (%s, %s, %s, %s, %s, %s, %s, CURRENT_TIMESTAMP - (%s || ' minutes')::INTERVAL, %s, %s, %s, %s, %s, %s, %s)
+                    ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
                     ON CONFLICT (ticket_number) DO NOTHING;
                 """, (
                     t_num, cust_id, cust_name, acc_num, t["incident_type"],
-                    t["amount_involved"], 0.0, str(i * 15 + 5), t["reported_channel"],
+                    float(t["amount_involved"]), 0.0, inc_date, t["reported_channel"],
                     t["severity"], "UNDER_INVESTIGATION", "Andrew (SOC Operations)",
                     t["suspect_entity"], t["description"], "Complaint ingested into SOC queue."
                 ))
@@ -2623,19 +2630,18 @@ async def api_look_for_active_complaints():
                    incident_date, reported_channel, severity, status, assigned_investigator,
                    suspect_entity, description, action_taken, created_at, updated_at
             FROM fraud_tickets
-            WHERE status != 'RESOLVED'
-            ORDER BY incident_date DESC;
+            ORDER BY incident_date DESC, ticket_id DESC;
         """)
         rows = cursor.fetchall()
         cols = [col[0] for col in cursor.description]
         tickets = [dict(zip(cols, r)) for r in rows]
 
-        return {
+        return clean_db_record({
             "success": True,
             "seeded": seeded_count > 0,
             "seeded_count": seeded_count,
             "tickets": tickets
-        }
+        })
     finally:
         cursor.close()
         conn.close()

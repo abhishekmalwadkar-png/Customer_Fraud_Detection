@@ -1082,22 +1082,25 @@ app.all(['/api/fraud-tickets/look-for-active', '/api/fraud-tickets/seed-random-f
         }
       }
 
-      // Fetch fresh active tickets list
+      // Fetch all tickets list
       const freshRes = await client.query(`
         SELECT ticket_id, ticket_number, customer_id, customer_name, customer_name AS full_name,
                account_number, incident_type, amount_involved, recovered_amount,
                incident_date, reported_channel, severity, status, assigned_investigator,
                suspect_entity, description, action_taken, created_at, updated_at
         FROM fraud_tickets
-        WHERE status != 'RESOLVED'
-        ORDER BY incident_date DESC;
+        ORDER BY incident_date DESC, ticket_id DESC;
       `);
 
       res.json({
         success: true,
         seeded: seededCount > 0,
         seeded_count: seededCount,
-        tickets: freshRes.rows
+        tickets: freshRes.rows.map(r => ({
+          ...r,
+          amount_involved: parseFloat(r.amount_involved || 0),
+          recovered_amount: parseFloat(r.recovered_amount || 0)
+        }))
       });
     } finally {
       client.release();

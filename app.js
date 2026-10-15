@@ -416,7 +416,7 @@ function initEventListeners() {
   }
 
   // Refresh & Export buttons
-  document.getElementById("btnRefreshTickets").addEventListener("click", () => {
+  document.getElementById("btnRefreshTickets")?.addEventListener("click", () => {
     loadAllData();
     showToast("Refreshed data from PostgreSQL database", "success");
   });
@@ -1282,7 +1282,7 @@ async function fetchActiveComplaints() {
   const origHtml = btn ? btn.innerHTML : "";
   if (btn) {
     btn.disabled = true;
-    btn.innerHTML = `<i class="fa-solid fa-spinner fa-spin"></i> Checking Database...`;
+    btn.innerHTML = `<i class="fa-solid fa-spinner fa-spin"></i> Loading Complaints...`;
   }
 
   try {
@@ -1298,7 +1298,7 @@ async function fetchActiveComplaints() {
     const data = await res.json();
     isComplaintsViewActive = true;
 
-    if (Array.isArray(data.tickets)) {
+    if (Array.isArray(data.tickets) && data.tickets.length > 0) {
       allTickets = data.tickets;
       data.tickets.forEach(t => knownTicketIds.add(String(t.ticket_number || t.ticket_id)));
       try {
@@ -1308,14 +1308,24 @@ async function fetchActiveComplaints() {
       await loadFraudTickets(true);
     }
 
+    // Reset filter controls to ALL so newly generated complaints are immediately visible
+    const searchInput = document.getElementById("ticketSearchInput");
+    const sevFilter = document.getElementById("filterSeverity");
+    const statusFilter = document.getElementById("filterStatus");
+    const typeFilter = document.getElementById("filterIncidentType");
+    if (searchInput) searchInput.value = "";
+    if (sevFilter) sevFilter.value = "ALL";
+    if (statusFilter) statusFilter.value = "ALL";
+    if (typeFilter) typeFilter.value = "ALL";
+
     ticketCurrentPage = 1;
     applyFilters();
     loadOverviewStats(false, true);
 
+    const activeCount = allTickets.filter(t => t.status !== 'RESOLVED').length;
     if (data.seeded && data.seeded_count > 0) {
-      showToast(`⚡ Generated & added ${data.seeded_count} random complaints to PostgreSQL database!`, "success");
+      showToast(`⚡ Generated & added ${data.seeded_count} random complaints to database!`, "success");
     } else {
-      const activeCount = allTickets.filter(t => t.status !== 'RESOLVED').length;
       showToast(`Loaded ${activeCount} active customer complaints from database`, "success");
     }
   } catch (err) {
