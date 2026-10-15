@@ -1282,7 +1282,7 @@ async function fetchActiveComplaints() {
   const origHtml = btn ? btn.innerHTML : "";
   if (btn) {
     btn.disabled = true;
-    btn.innerHTML = `<i class="fa-solid fa-spinner fa-spin"></i> Generating 5 Complaints...`;
+    btn.innerHTML = `<i class="fa-solid fa-spinner fa-spin"></i> Looking for Complaints...`;
   }
 
   const tbody = document.getElementById("fraudTicketsTableBody");
@@ -1292,7 +1292,7 @@ async function fetchActiveComplaints() {
         <td colspan="8" style="padding: 45px 20px; text-align: center; color: #64748b;">
           <div style="display: flex; flex-direction: column; align-items: center; gap: 12px;">
             <i class="fa-solid fa-spinner fa-spin" style="font-size: 28px; color: #f97316;"></i>
-            <span style="font-weight: 700; font-size: 14.5px; color: #0f172a;">Generating 5 new active fraud complaints in PostgreSQL...</span>
+            <span style="font-weight: 700; font-size: 14.5px; color: #0f172a;">Looking for active customer complaints in database...</span>
             <span style="font-size: 12.5px; color: #64748b;">Connecting to live database and populating SOC queue</span>
           </div>
         </td>
@@ -1340,7 +1340,7 @@ async function fetchActiveComplaints() {
     loadOverviewStats(false, true);
 
     const activeCount = allTickets.filter(t => t.status !== 'RESOLVED').length;
-    showToast(`⚡ Generated 5 new active complaints (${activeCount} active in queue)!`, "success");
+    showToast(`⚡ Loaded ${activeCount} active customer complaints!`, "success");
   } catch (err) {
     console.error("fetchActiveComplaints error:", err);
     showToast(`Error generating complaints: ${err.message}`, "error");
@@ -1584,7 +1584,7 @@ function renderFraudTicketsTable(tickets) {
     const isAllResolved = totalActiveCount === 0 && allTickets.length > 0;
     const titleText = isAllResolved ? "All Complaints Resolved" : "Active Complaints Queue";
     const subText = isAllResolved 
-      ? "All tickets have been resolved and closed. Click below to look for active complaints or generate 5 new cases."
+      ? "All tickets have been resolved and closed. Click below to look for active complaints."
       : "Click below to look for and display all active customer fraud complaints from the database.";
     const iconClass = isAllResolved ? "fa-circle-check" : "fa-clipboard-list";
     const iconColor = isAllResolved ? "#059669" : "#ea580c";
